@@ -3,6 +3,7 @@ import torch
 import torchvision
 import models.Autoencoder as AE
 import common.trainer as trainer
+import datetime
 
 
 
@@ -20,21 +21,14 @@ with open(args.config, 'r') as config_file:
     for line in lines:
         line = line.replace('\n', '')
         ls = line.split(' ')
-        config[ls[0]] = ls[-1]
-        if 'optimizer:' in ls[0]:
-            optimizer = str(ls[-1])
-        elif 'lr:' in ls[0]:
-            lr = float(ls[-1])
-        elif 'epochs:' in ls[0]:
-            epochs = int(ls[-1])
-        else: 
-            print('Did not process: %s'%line)
+        config[ls[0]] = ls[1]
 print('Parsed config:\n  %s'%str(config))
 
 ##Create datasetloader
 loader = None
 if args.data == 'MNIST':
-    loader = torchvision.datasets.MNIST(root = 'data', train = True, download = True)
+    transform = torchvision.transforms.ToTensor()
+    loader = torchvision.datasets.MNIST(root = 'data', train = True, download = True, transform = transform)
 else: 
     raise NotImplementedError('The dataset you specified is not implemented')
 print('Given %d training points'%len(loader))
@@ -53,4 +47,9 @@ if args.model == 'AE':
     loss = torch.nn.functional.l1_loss
     
     
-#trainer.train(loader, model, loss, optimizer, epochs)
+optim = trainer.train(loader, model, loss, config)
+
+##save model
+timestamp = str(datetime.datetime.now()).replace(' ', '_')
+save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
+torch.save(save_dict, 'trained_models/'+args.model+'_'+args.data+'_'+timestamp)
