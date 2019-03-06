@@ -8,7 +8,7 @@ import datetime
 
 
 parser = arg.ArgumentParser(description='Train generative model.')
-parser.add_argument('--model', type=str, choices=('AE', 'VAE'), help='Which model to train', required=True)
+parser.add_argument('--model', type=str, choices=('AE', 'AE_linear'), help='Which model to train', required=True)
 parser.add_argument('--data', type=str, choices=('MNIST', ''), help='Data name to be used for training', required=True)
 parser.add_argument('--config', type=str, help='path to config file', required=True)
 parser.add_argument('--batch_size', type=int, help='specify batch size', default=20)
@@ -24,6 +24,9 @@ with open(args.config, 'r') as config_file:
         ls = line.split(' ')
         config[ls[0]] = ls[1]
 print('Parsed config:\n  %s'%str(config))
+
+if args.model == 'AE_linear':
+    args.batch_size = 1
 
 ##Create datasetloader
 loader = None
@@ -44,6 +47,11 @@ print('Given %d training points (batch size: %d)'%(len(loader), args.batch_size)
 model = None
 if args.model == 'AE':
     model = AE.Autoencoder()
+elif args.model == 'AE_linear':
+    if args.data == 'MNIST':
+        model = AE.LinearAutoencoder(input_size=(28,28))
+    else:
+        raise NotImplementedError('Only for MNIST yet')
 else:
     raise NotImplementedError('The model you specified is not implemented yet')
     
@@ -51,6 +59,8 @@ else:
 loss = None
 if config['loss'] == 'L1':
     loss = torch.nn.functional.l1_loss
+elif config['loss'] == 'MSE':
+    loss = torch.nn.functional.mse_loss
 else:
     raise NotImplementedError('Loss not supported')
     
