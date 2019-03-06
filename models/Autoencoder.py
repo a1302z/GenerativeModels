@@ -10,18 +10,25 @@ class Autoencoder(nn.Module):
             channels = 1
         self.encoder = nn.Sequential(
             nn.Conv2d(channels, 32, 3),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(32, 64, 3),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(64, 128, 2),
+            nn.LeakyReLU(),
+            
         )
         
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128, 64, 2),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 64, 2),
             nn.ConvTranspose2d(64, 32, 3, stride=1),
-                nn.ConvTranspose2d(32, 32, 2),
-            nn.ConvTranspose2d(32, 3, 3, stride=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 32, 2),
+            nn.ConvTranspose2d(32, channels, 3, stride=1),
+            nn.Tanh(),
         )
         
     def forward(self, x):

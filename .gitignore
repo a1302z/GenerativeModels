@@ -1,2 +1,6 @@
 data/
 trained_models/
+__pycache__/
+**/__pycache__/
+dataset_loaders/MNIST.py
+result_figures/
