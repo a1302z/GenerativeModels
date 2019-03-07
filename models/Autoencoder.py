@@ -74,7 +74,7 @@ class LinearAutoencoder(nn.Module):
             nn.LeakyReLU(),
             nn.ConvTranspose2d(32, 32, 2),
             nn.ConvTranspose2d(32, channels, 3, stride=1),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
         
     def forward(self, x):
@@ -101,6 +101,73 @@ class LinearAutoencoder(nn.Module):
         return x
     
     def decode(self, hidden):
+        x = self.fromhidden(x)
+        x = x.view(self.s)
+        x = self.decoder(x)
+        return x
+    
+class VariationalAutoencoder(nn.Module):
+    # input size being tupel of image dimension
+    def __init__(self, input_size, hidden_size, RGB = False):
+        super(VariationalAutoencoder, self).__init__()
+        if RGB:
+            channels = 3
+        else: 
+            channels = 1
+        self.encoder = nn.Sequential(
+            nn.Conv2d(channels, 32, 3),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, stride=1),
+            nn.Conv2d(32, 64, 3),
+            nn.LeakyReLU(),
+            nn.MaxPool2d(2, stride=1),
+            nn.Conv2d(64, 128, 2),
+            nn.LeakyReLU(),
+            
+        )
+        self.mean = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size)
+        self.variance = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size)
+        
+        self.fromhidden = nn.Linear(hidden_size, (input_size[0]-7)*(input_size[1]-7)*128)
+        
+        self.decoder = nn.Sequential(
+            nn.ConvTranspose2d(128, 64, 2),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(64, 64, 2),
+            nn.ConvTranspose2d(64, 32, 3, stride=1),
+            nn.LeakyReLU(),
+            nn.ConvTranspose2d(32, 32, 2),
+            nn.ConvTranspose2d(32, channels, 3, stride=1),
+            nn.Sigmoid(),
+        )
+        
+    def forward(self, x):
+        if len(x.size()) < 4:
+            x = x.unsqueeze(0)
+        #print(x.size())
+        x = self.encoder(x)
+        self.s = x.size()
+        x = x.view(-1)
+        mean = self.mean(x)
+        variance = self.variance(x)
+        dist = torch.distributions.normal.Normal(mean, variance)
+        x = dist.sample()
+        
+        x = self.fromhidden(x)
+        x = x.view(self.s)
+        x = self.decoder(x)
+        return x, mean, variance
+    
+    def encode(self, x):
+        if len(x.size()) < 4:
+            x = x.unsqueeze(0)
+        x = self.encoder(x)
+        x = x.view(-1)
+        mean = self.mean(x)
+        var = self.variance(x)
+        return mean, var
+    
+    def decode(self, sample_vector):
         x = self.fromhidden(x)
         x = x.view(self.s)
         x = self.decoder(x)

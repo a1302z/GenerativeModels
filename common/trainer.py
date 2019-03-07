@@ -1,4 +1,5 @@
 import torch
+import models.Autoencoder as AE
 
 def train(dataset, model, loss_fn, config):
     print("Learning rate is %f"%float(config['lr']))
@@ -15,8 +16,16 @@ def train(dataset, model, loss_fn, config):
     for epoch in range(epochs):
         print("Starting Epoch %d/%d"%(epoch,epochs))
         for i, (data, target) in enumerate(dataset):
-            prediction = model(data)
-            loss = loss_fn(prediction, data)
+            loss = None
+            if type(model) == AE.VariationalAutoencoder:
+                prediction, mean, var = model(data)
+                loss = loss_fn(prediction, data)
+                ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
+                kl_div = -0.5*torch.sum(mean**2 +torch.exp(var)**2 - var - 1)
+                loss += kl_div
+            else:
+                prediction = model(data)
+                loss = loss_fn(prediction, data)
             loss.backward()
             optim.step()
             if i % (len(dataset)/10) == 0:

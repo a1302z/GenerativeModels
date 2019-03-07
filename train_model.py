@@ -8,7 +8,7 @@ import datetime
 
 
 parser = arg.ArgumentParser(description='Train generative model.')
-parser.add_argument('--model', type=str, choices=('AE', 'AE_linear'), help='Which model to train', required=True)
+parser.add_argument('--model', type=str, choices=('AE', 'AE_linear', 'VAE'), help='Which model to train', required=True)
 parser.add_argument('--data', type=str, choices=('MNIST', ''), help='Data name to be used for training', required=True)
 parser.add_argument('--config', type=str, help='path to config file', required=True)
 parser.add_argument('--batch_size', type=int, help='specify batch size', default=20)
@@ -50,6 +50,11 @@ if args.model == 'AE':
 elif args.model == 'AE_linear':
     if args.data == 'MNIST':
         model = AE.LinearAutoencoder(input_size=(28,28))
+    else:
+        raise NotImplementedError('Only for MNIST yet')
+elif args.model == 'VAE':
+    if args.data == 'MNIST':
+        model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=10)
     else:
         raise NotImplementedError('Only for MNIST yet')
 else:
