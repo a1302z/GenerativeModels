@@ -28,7 +28,7 @@ class Autoencoder(nn.Module):
             nn.LeakyReLU(),
             nn.ConvTranspose2d(32, 32, 2),
             nn.ConvTranspose2d(32, channels, 3, stride=1),
-            nn.Tanh(),
+            nn.Sigmoid(),
         )
         
     def forward(self, x):
@@ -46,7 +46,7 @@ class Autoencoder(nn.Module):
 
 class LinearAutoencoder(nn.Module):
     # input size being tupel of image dimension
-    def __init__(self, input_size, RGB = False):
+    def __init__(self, input_size, RGB = False, hidden_size=(512, 128)):
         super(LinearAutoencoder, self).__init__()
         if RGB:
             channels = 3
@@ -54,17 +54,26 @@ class LinearAutoencoder(nn.Module):
             channels = 1
         self.encoder = nn.Sequential(
             nn.Conv2d(channels, 32, 3),
+            nn.BatchNorm2d(32),
             nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(32, 64, 3),
             nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(64, 128, 2),
+            nn.BatchNorm2d(128),
             nn.LeakyReLU(),
             
         )
-        self.tohidden = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, 10)
-        self.fromhidden = nn.Linear(10, (input_size[0]-7)*(input_size[1]-7)*128)
+        self.tohidden = nn.Sequential(
+            nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size[0]),
+            nn.LeakyReLU(),
+            nn.Linear(hidden_size[0], hidden_size[1]),
+        )
+        self.fromhidden = nn.Sequential(
+            nn.Linear(hidden_size[1], (input_size[0]-7)*(input_size[1]-7)*128),
+            nn.LeakyReLU()
+        )
         
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128, 64, 2),
@@ -83,7 +92,7 @@ class LinearAutoencoder(nn.Module):
         #print(x.size())
         x = self.encoder(x)
         self.s = x.size()
-        x = x.view(-1)
+        x = x.view(self.s[0], -1)
         x = self.tohidden(x)
         hidden = x
         x = self.fromhidden(x)
@@ -96,7 +105,8 @@ class LinearAutoencoder(nn.Module):
         if len(x.size()) < 4:
             x = x.unsqueeze(0)
         x = self.encoder(x)
-        x = x.view(-1)
+        self.s = x.size()
+        x = x.view(self.s[0], -1)
         x = self.tohidden(x)
         return x
     
@@ -108,8 +118,9 @@ class LinearAutoencoder(nn.Module):
     
 class VariationalAutoencoder(nn.Module):
     # input size being tupel of image dimension
-    def __init__(self, input_size, hidden_size, RGB = False):
+    def __init__(self, input_size, hidden_size=(128,15), RGB = False):
         super(VariationalAutoencoder, self).__init__()
+        self.hidden_size = hidden_size
         if RGB:
             channels = 3
         else: 
@@ -119,16 +130,20 @@ class VariationalAutoencoder(nn.Module):
             nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(32, 64, 3),
-            nn.LeakyReLU(),
+            nn.BatchNorm2d(64),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(64, 128, 2),
             nn.LeakyReLU(),
             
         )
-        self.mean = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size)
-        self.variance = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size)
+        self.hidden = nn.Linear((input_size[0]-7)*(input_size[1]-7)*128, hidden_size[0])
+        self.mean = nn.Linear(hidden_size[0], hidden_size[1])
+        self.log_var = nn.Linear(hidden_size[0], hidden_size[1])
         
-        self.fromhidden = nn.Linear(hidden_size, (input_size[0]-7)*(input_size[1]-7)*128)
+        self.fromhidden = nn.Sequential(
+            nn.Linear(hidden_size[1], hidden_size[0]),
+            nn.Linear(hidden_size[0], (input_size[0]-7)*(input_size[1]-7)*128)
+        )
         
         self.decoder = nn.Sequential(
             nn.ConvTranspose2d(128, 64, 2),
@@ -147,25 +162,37 @@ class VariationalAutoencoder(nn.Module):
         #print(x.size())
         x = self.encoder(x)
         self.s = x.size()
-        x = x.view(-1)
+        x = x.view(self.s[0], -1)
+        x = self.hidden(x)
         mean = self.mean(x)
-        variance = self.variance(x)
-        dist = torch.distributions.normal.Normal(mean, variance)
-        x = dist.sample()
+        log_var = self.log_var(x)
+        
+        x = self.sample_z(mean, log_var)
         
         x = self.fromhidden(x)
         x = x.view(self.s)
         x = self.decoder(x)
-        return x, mean, variance
+        return x, mean, log_var
+    
+    def sample_z(self, mu, log_var):
+        # Using reparameterization trick to sample from a gaussian
+        eps = torch.randn(self.hidden_size[1], requires_grad=True)
+        if torch.cuda.is_available():
+            eps = eps.cuda()
+        return mu + torch.exp(log_var / 2) * eps
+        
+
     
     def encode(self, x):
         if len(x.size()) < 4:
             x = x.unsqueeze(0)
         x = self.encoder(x)
-        x = x.view(-1)
+        self.s = x.size()
+        x = x.view(self.s[0], -1)
+        x = self.hidden(x)
         mean = self.mean(x)
-        var = self.variance(x)
-        return mean, var
+        log_var = self.log_var(x)
+        return mean, log_var
     
     def decode(self, sample_vector):
         x = self.fromhidden(x)

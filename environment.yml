@@ -1,9 +1,12 @@
 name: py3_genmodels
 channels:
   - conda-forge
+  - pytorch
 dependencies:
   - python=3.7
   - pytorch
+  - torchvision
   - matplotlib
   - pandas
   - scikit-learn
+  - visdom

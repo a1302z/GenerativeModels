@@ -1,6 +1,13 @@
 data/
 trained_models/
-__pycache__/
+/__pycache__/
 **/__pycache__/
+**/__pycache__/**
 dataset_loaders/MNIST.py
 result_figures/
+**.pyc
+/.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+models/__pycache__/Autoencoder.cpython-37.pyc
+

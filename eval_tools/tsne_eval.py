@@ -30,6 +30,9 @@ loader = torch.utils.data.DataLoader(
 model = AE.LinearAutoencoder(input_size=(28,28))
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
+cuda = torch.cuda.is_available()
+if cuda:
+    model.cuda()
 
 hidden_list = []
 targets = []
@@ -38,7 +41,11 @@ for i, (data, target) in enumerate(loader):
     #    break
     if i % int(len(loader)/10) == 0:
         print('%d/%d'%(i,len(loader)))
-    hidden = model.encode(data).detach().numpy()
+    if cuda:
+        data = data.cuda()
+        hidden = model.encode(data).cpu().detach().numpy()
+    else:
+        hidden = model.encode(data).detach().numpy()
     hidden_list.append(hidden)
     targets.append(target[0])
 

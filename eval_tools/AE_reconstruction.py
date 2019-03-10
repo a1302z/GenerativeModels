@@ -12,7 +12,7 @@ import models.Autoencoder as AE
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, required=True, help='path to trained autoencoder')
-parser.add_argument('--model', type=str, choices=('AE','AE_linear'), required = True, help='Specify model')
+parser.add_argument('--model', type=str, choices=('AE','AE_linear', 'VAE'), required = True, help='Specify model')
 parser.add_argument('--num_pics', type=int, default=5, help='How many pics to show in evaluation?')
 args = parser.parse_args()
 
@@ -26,18 +26,32 @@ loader = torch.utils.data.DataLoader(
 if args.model == 'AE':
     model = AE.Autoencoder()
 elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder(input_size=(28,28))
+    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(512,256))
+elif args.model == 'VAE':
+    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(512,128))
 else:
     raise NotImplementedError('Model not supported')
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
+
+cuda = torch.cuda.is_available()
+if cuda:
+    model.cuda()
 
 img_list = []
 for i, (data, target) in enumerate(loader):
     if i % int(len(loader)/args.num_pics) == 0:
         print('%d/%d'%(i/int(len(loader)/args.num_pics),args.num_pics))
         print('Target: %d'%target[0])
-        reconstructed = model(data)
+        if cuda:
+            data = data.cuda()
+        if args.model == 'VAE':
+            reconstructed, _, _ = model(data)
+        else:
+            reconstructed = model(data)
+        if cuda:
+            reconstructed = reconstructed.cpu()
+            data = data.cpu()
         #hidden = model.encode(data)
         #print(data.squeeze(0).size())
         #print(reconstructed.squeeze(0).size())
@@ -48,9 +62,8 @@ for i, (data, target) in enumerate(loader):
         #print("(data) Min: %f\t Max: %f"%(mi,ma))
         mi, ma = rec_img.numpy().min(), rec_img.numpy().max()
         #rec_img = (rec_img-mi)/(ma-mi)
-        #mi, ma = rec_img.numpy().min(), rec_img.numpy().max()
-        #print("(recu) Min: %f\t Max: %f"%(mi,ma))
-        img_list.append(torch.stack([data_img.cpu(), rec_img], 0))
+        print("(recu) Min: %f\t Max: %f"%(mi,ma))
+        img_list.append(torch.stack([data_img, rec_img], 0))
 
 img = make_grid(torch.cat(img_list, 0), nrow=2)
 save_image(img, 'result_figures/'+args.model+'_reconstruction.png')
