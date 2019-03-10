@@ -22,17 +22,19 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
         vis_env = 'training'
         vis = visdom.Visdom()
         assert vis.check_connection(timeout_seconds=3), 'No connection could be formed quickly'
-        plt_dict = dict(name='training loss',ymin=0, xlabel='iterations', ylabel='loss', legend=['train_loss'])
+        plt_dict = dict(name='training loss',ymin=0, xlabel='epoch', ylabel='loss', legend=['train_loss'])
         vis_plot = vis.line(Y=[0],env=vis_env,opts=plt_dict)
         vis_image = vis.image(np.zeros((1,28,28)),env=vis_env)
         if type(model) == AE.VariationalAutoencoder:
-            vae_dict = dict(ymin=0, ymax=10, legend=['reconstruction loss', 'kl loss'])
+            vae_dict = dict(ymin=0, ymax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
     overfit = num_overfit > -1
     log_every = int(len(dataset)/int(config['log_every_dataset_chunk'])) if not overfit else num_overfit
     epochs = int(config['epochs'])
     loss_log = []
     loss_vae = []
+    x = []
+    div = 1./float(len(dataset) if not overfit else num_overfit)
     for epoch in range(epochs):
         print("Starting Epoch %d/%d"%(epoch+1,epochs))
         for i, (data, target) in enumerate(dataset):
@@ -42,6 +44,7 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
             if cuda:
                 data = data.cuda()
             loss = None
+            optim.zero_grad()
             if type(model) == AE.VariationalAutoencoder:
                 prediction, mean, log_var = model(data)
                 loss_img = loss_fn(prediction, data)
@@ -55,10 +58,11 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
             loss.backward()
             optim.step()
             loss_log.append(loss.detach().cpu())
+            x.append(epoch+float(i)*div)
             if i % log_every == 0:
                 print("  Loss after %d/%d iterations: %f"%(i,len(dataset) if not overfit else num_overfit,loss))
                 if use_vis:
-                    x = np.asarray([0]) if i == 0 and epoch==0 else np.asarray(range(0,epoch*(len(dataset) if not overfit else num_overfit)+i+1))
+                    #x = np.asarray([0]) if i == 0 and epoch==0 else np.asarray(range(0,epoch*(len(dataset) if not overfit else num_overfit)+i+1))
                     y = np.asarray(loss_log)
                     vis_plot = vis.line(win=vis_plot,X=x,Y=loss_log, env=vis_env, opts=plt_dict)
                     img = prediction.cpu()

@@ -11,7 +11,7 @@ parser = arg.ArgumentParser(description='Train generative model.')
 parser.add_argument('--model', type=str, choices=('AE', 'AE_linear', 'VAE'), help='Which model to train', required=True)
 parser.add_argument('--data', type=str, choices=('MNIST', ''), help='Data name to be used for training', required=True)
 parser.add_argument('--config', type=str, help='path to config file', required=True)
-parser.add_argument('--batch_size', type=int, help='specify batch size', default=100)
+parser.add_argument('--batch_size', type=int, help='specify batch size', default=1000)
 parser.add_argument('--overfit', type=int, default=-1, help='Overfit to number of samples')
 args = parser.parse_args()
 
@@ -59,7 +59,7 @@ elif args.model == 'AE_linear':
         raise NotImplementedError('Only for MNIST yet')
 elif args.model == 'VAE':
     if args.data == 'MNIST':
-        model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(512,128))
+        model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(256,32))
     else:
         raise NotImplementedError('Only for MNIST yet')
 else:
@@ -72,7 +72,7 @@ if config['loss'] == 'L1':
 elif config['loss'] == 'MSE':
     loss = torch.nn.functional.mse_loss
 elif config['loss'] == 'BCE':
-    loss = torch.nn.BCELoss()
+    loss = torch.nn.BCELoss(size_average=False)
 else:
     raise NotImplementedError('Loss not supported')
     

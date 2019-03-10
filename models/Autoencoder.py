@@ -127,10 +127,11 @@ class VariationalAutoencoder(nn.Module):
             channels = 1
         self.encoder = nn.Sequential(
             nn.Conv2d(channels, 32, 3),
+            nn.BatchNorm2d(32),
             nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(32, 64, 3),
-            nn.BatchNorm2d(64),
+            nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(64, 128, 2),
             nn.LeakyReLU(),
@@ -149,9 +150,11 @@ class VariationalAutoencoder(nn.Module):
             nn.ConvTranspose2d(128, 64, 2),
             nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 64, 2),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 32, 3, stride=1),
             nn.LeakyReLU(),
             nn.ConvTranspose2d(32, 32, 2),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(32, channels, 3, stride=1),
             nn.Sigmoid(),
         )

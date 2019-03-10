@@ -16,8 +16,7 @@ import models.Autoencoder as AE
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, required=True, help='path to trained autoencoder')
-#parser.add_argument('--model', type=str, choices=('AE','AE_linear'), required = True, help='Specify model')
-#parser.add_argument('--num_pics', type=int, default=50, help='How many pics to show in evaluation?')
+parser.add_argument('--model', type=str, choices=('AE','AE_linear', 'VAE'), required = True, help='Specify model')
 args = parser.parse_args()
 
 loader = torch.utils.data.DataLoader(
@@ -27,7 +26,12 @@ loader = torch.utils.data.DataLoader(
                            torchvision.transforms.Normalize((0.1307,), (0.3081,))
                        ])),
                         batch_size=1, shuffle=False)
-model = AE.LinearAutoencoder(input_size=(28,28))
+if args.model == 'AE':
+    model = AE.Autoencoder()
+elif args.model == 'AE_linear':
+    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(512,256))
+elif args.model == 'VAE':
+    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(256,32))
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
 cuda = torch.cuda.is_available()
@@ -43,9 +47,10 @@ for i, (data, target) in enumerate(loader):
         print('%d/%d'%(i,len(loader)))
     if cuda:
         data = data.cuda()
-        hidden = model.encode(data).cpu().detach().numpy()
-    else:
-        hidden = model.encode(data).detach().numpy()
+    hidden = model.encode(data)
+    if args.model == 'VAE':
+        hidden = hidden[0]
+    hidden = hidden.detach().cpu().numpy()
     hidden_list.append(hidden)
     targets.append(target[0])
 
@@ -65,6 +70,6 @@ for g in np.unique(targets):
     ax.scatter(X_embedded[ix,0], X_embedded[ix,1], color = cm(g/10.0), label = g, alpha=0.5)
 ax.legend()
 
-plt.savefig('result_figures/tsne_autoencoder.png')
+plt.savefig('result_figures/tsne_'+args.model+'.png')
 plt.show()
 
