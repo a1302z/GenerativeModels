@@ -195,7 +195,7 @@ class VariationalAutoencoder(nn.Module):
         return mean, log_var
     
     def decode(self, sample_vector):
-        x = self.fromhidden(x)
+        x = self.fromhidden(sample_vector)
         x = x.view(self.s)
         x = self.decoder(x)
         return x
