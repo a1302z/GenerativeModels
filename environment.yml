@@ -10,3 +10,5 @@ dependencies:
   - pandas
   - scikit-learn
   - visdom
+  - ipywidgets
+  - nodejs

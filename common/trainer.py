@@ -2,9 +2,17 @@ import torch
 import models.Autoencoder as AE
 import visdom
 import matplotlib.pyplot as plt
+import datetime
 import numpy as np
+import os
 
-def train(dataset, model, loss_fn, config, num_overfit=-1):
+def save_model(model, optim, save_dir, name):
+    save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
+    path = save_dir + '/'+name
+    torch.save(save_dict, path)
+    print('Saved model %s to %s'%(name, path))
+
+def train(args, dataset, model, loss_fn, config, num_overfit=-1):
     print("Learning rate is %f"%float(config['lr']))
     if config['optimizer'] == 'SGD':
         optim = torch.optim.SGD(list(model.parameters()), lr=float(config['lr']))
@@ -12,6 +20,22 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
         optim = torch.optim.Adam(list(model.parameters()), lr=float(config['lr']))
     else:
         print('Unknown optimizer!')
+    if not 'save_epoch_interval' in config.keys():
+        raise KeyError('save_epoch_interval not given in config')
+    overfit = num_overfit > -1
+    save_interval = int(config['save_epoch_interval'])
+    ##create save folder
+    timestamp = str(datetime.datetime.now()).replace(' ', '_')
+    path = args.model+'_'+args.data+'_'+timestamp
+    if overfit:
+        path += '_overfitted'
+    save_dir = 'trained_models/'+path
+    try:
+        if not os.path.exists(save_dir):
+            os.makedirs(save_dir)
+    except OSError:
+        print ('Error: Creating directory. ' + save_dir)
+    print("Created save directory at %s"%save_dir)
     cuda = torch.cuda.is_available()
     if cuda:
         print("CUDA available")
@@ -28,7 +52,6 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
         if type(model) == AE.VariationalAutoencoder:
             vae_dict = dict(ymin=0, ymax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
-    overfit = num_overfit > -1
     log_every = int(len(dataset)/int(config['log_every_dataset_chunk'])) if not overfit else num_overfit
     epochs = int(config['epochs'])
     loss_log = []
@@ -50,7 +73,7 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
                 loss_img = loss_fn(prediction, data)
                 ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
                 kl_div = 0.5*torch.sum(mean**2 +torch.exp(log_var) - log_var - 1.0)
-                loss = 10*loss_img + kl_div
+                loss = loss_img + 100*kl_div
                 loss_vae.append([loss_img.detach().cpu(), kl_div.detach().cpu()])
             else:
                 prediction = model(data)
@@ -71,7 +94,10 @@ def train(dataset, model, loss_fn, config, num_overfit=-1):
                     if type(model) == AE.VariationalAutoencoder:
                         vis_vae = vis.line(win=vis_vae, X=x,Y=loss_vae, env=vis_env, opts=vae_dict)
                     vis.save(envs=[vis_env])
+        if epoch % save_interval == 0 and epoch > 0:
+            save_model(model, optim, save_dir, 'epoch_'+str(epoch))
+    
         
-          
+    save_model(model, optim, save_dir, 'final_model')      
     return optim
             

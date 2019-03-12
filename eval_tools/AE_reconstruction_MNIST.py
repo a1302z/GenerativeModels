@@ -10,6 +10,15 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
 import models.Autoencoder as AE
 
+def normalize(vector):
+    min_v = torch.min(vector)
+    range_v = torch.max(vector) - min_v
+    if range_v > 0:
+        normalised = (vector - min_v) / range_v
+    else:
+        normalised = torch.zeros(vector.size())
+    return normalised
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, required=True, help='path to trained autoencoder')
 parser.add_argument('--model', type=str, choices=('AE','AE_linear', 'VAE'), required = True, help='Specify model')
@@ -26,9 +35,9 @@ loader = torch.utils.data.DataLoader(
 if args.model == 'AE':
     model = AE.Autoencoder()
 elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(512,256))
+    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(128,2))
 elif args.model == 'VAE':
-    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(512,128))
+    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(128,2))
 else:
     raise NotImplementedError('Model not supported')
 checkpoint = torch.load(args.model_path)
@@ -41,34 +50,34 @@ if cuda:
 img_list = []
 for i, (data, target) in enumerate(loader):
     if i % int(len(loader)/args.num_pics) == 0:
-        print('%d/%d'%(i/int(len(loader)/args.num_pics),args.num_pics))
-        print('Target: %d'%target[0])
+        print('Image %d/%d (Target: %d)'%(i/int(len(loader)/args.num_pics),args.num_pics, target[0]))
+        img_list.append(data.squeeze(0))
         if cuda:
             data = data.cuda()
         if args.model == 'VAE':
-            reconstructed, _, _ = model(data)
+            mu, log_var = model.encode(data)
+            z = model.sample_z(mu, log_var)
+            reconstructed = model.decode(z)
         else:
             reconstructed = model(data)
-        if cuda:
-            reconstructed = reconstructed.cpu()
-            data = data.cpu()
+        
         #hidden = model.encode(data)
         #print(data.squeeze(0).size())
         #print(reconstructed.squeeze(0).size())
-        rec_img = reconstructed.squeeze(0).detach()
-        data_img = data.squeeze(0)
+        rec_img = reconstructed.squeeze(0).detach().cpu()
+        #data_img = normalize(data.squeeze(0)).cpu()
 
-        mi, ma = data_img.min(), data_img.max()
+        #mi, ma = data_img.min(), data_img.max()
         #print("(data) Min: %f\t Max: %f"%(mi,ma))
-        mi, ma = rec_img.numpy().min(), rec_img.numpy().max()
-        #rec_img = (rec_img-mi)/(ma-mi)
-        print("(recu) Min: %f\t Max: %f"%(mi,ma))
-        img_list.append(torch.stack([data_img, rec_img], 0))
+        #mi, ma = rec_img.numpy().min(), rec_img.numpy().max()
+        #print("(recu) Min: %f\t Max: %f"%(mi,ma))
+        img_list.append(rec_img)
 
-img = make_grid(torch.cat(img_list, 0), nrow=2)
+img = make_grid(img_list, nrow=2)*255
 save_image(img, 'result_figures/'+args.model+'_reconstruction.png')
-img = np.moveaxis(img.numpy(), 0, -1)
-plt.imshow(img)
+img = np.sum(img.numpy(), axis=0)
+plt.figure(figsize=(2.0, args.num_pics))
+plt.imshow(img, cmap=plt.cm.gray)
 plt.show()
 
 

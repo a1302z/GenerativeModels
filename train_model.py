@@ -3,7 +3,6 @@ import torch
 import torchvision
 import models.Autoencoder as AE
 import common.trainer as trainer
-import datetime
 
 
 
@@ -54,12 +53,12 @@ if args.model == 'AE':
     model = AE.Autoencoder()
 elif args.model == 'AE_linear':
     if args.data == 'MNIST':
-        model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(512,256))
+        model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(128,2))
     else:
         raise NotImplementedError('Only for MNIST yet')
 elif args.model == 'VAE':
     if args.data == 'MNIST':
-        model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(256,32))
+        model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(128,2))
     else:
         raise NotImplementedError('Only for MNIST yet')
 else:
@@ -72,18 +71,10 @@ if config['loss'] == 'L1':
 elif config['loss'] == 'MSE':
     loss = torch.nn.functional.mse_loss
 elif config['loss'] == 'BCE':
-    loss = torch.nn.BCELoss(size_average=False)
+    loss = torch.nn.BCELoss(reduction='sum')
 else:
     raise NotImplementedError('Loss not supported')
     
     
-optim = trainer.train(loader, model, loss, config, num_overfit=args.overfit)
+optim = trainer.train(args, loader, model, loss, config, num_overfit=args.overfit)
 
-##save model
-timestamp = str(datetime.datetime.now()).replace(' ', '_')
-save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
-path = 'trained_models/'+args.model+'_'+args.data+'_'+timestamp
-if overfit:
-    path += '_overfitted'
-print("Save model to path %s"%path)
-torch.save(save_dict, path)

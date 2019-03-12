@@ -42,6 +42,12 @@ class Autoencoder(nn.Module):
         #print(x.size())
         return x
     
+    def encode(self, x):
+        return self.encoder(x)
+    
+    def decode(self, x):
+        return self.decoder(x)
+    
     
 
 class LinearAutoencoder(nn.Module):
@@ -61,7 +67,6 @@ class LinearAutoencoder(nn.Module):
             nn.LeakyReLU(),
             nn.MaxPool2d(2, stride=1),
             nn.Conv2d(64, 128, 2),
-            nn.BatchNorm2d(128),
             nn.LeakyReLU(),
             
         )
@@ -79,9 +84,11 @@ class LinearAutoencoder(nn.Module):
             nn.ConvTranspose2d(128, 64, 2),
             nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 64, 2),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(64, 32, 3, stride=1),
             nn.LeakyReLU(),
             nn.ConvTranspose2d(32, 32, 2),
+            nn.LeakyReLU(),
             nn.ConvTranspose2d(32, channels, 3, stride=1),
             nn.Sigmoid(),
         )

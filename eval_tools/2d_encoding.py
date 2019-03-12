@@ -1,7 +1,5 @@
-from sklearn.manifold import TSNE
 import torch
 import torchvision
-from torchvision.utils import make_grid, save_image
 import argparse
 import matplotlib
 import matplotlib.pyplot as plt
@@ -39,38 +37,28 @@ cuda = torch.cuda.is_available()
 if cuda:
     model.cuda()
 
-hidden_list = []
+
+points = []
 targets = []
 for i, (data, target) in enumerate(loader):
-    #if i > 50:
-    #    break
-    if i % int(len(loader)/10) == 0:
-        print('%d/%d'%(i,len(loader)))
-    if cuda:
-        data = data.cuda()
-    hidden = model.encode(data)
+    if i % 1000 == 0:
+        print('%d/%d'%(i, len(loader)))
     if args.model == 'VAE':
-        hidden = hidden[0]
-    hidden = hidden.detach().cpu().numpy()
-    hidden_list.append(hidden)
-    targets.append(target[0])
-
-hidden_list = np.vstack(hidden_list)
-print('Computing tsne representation')
-X_embedded = TSNE(n_components=2).fit_transform(hidden_list)
-
-
+        x, log_var = model.encode(data.cuda())
+    else:
+        x = model.encode(data.cuda())
+    points.append(x.detach().cpu().numpy())
+    targets.append(target)
+    #if i > 10:
+    #    break
+points = np.vstack(points)
 targets = np.stack(targets)
-#plt.scatter(X_embedded[:,0], X_embedded[:,1], c=targets, alpha=0.3)
 
 cm = matplotlib.cm.get_cmap('gist_rainbow')
-
 fig, ax = plt.subplots()
 for g in np.unique(targets):
     ix = np.where(targets == g)
-    ax.scatter(X_embedded[ix,0], X_embedded[ix,1], color = cm(g/10.0), label = g, alpha=0.5)
+    ax.scatter(points[ix,0], points[ix,1], color = cm(g/10.0), label = g, alpha=0.5)
 ax.legend()
-
-plt.savefig('result_figures/tsne_'+args.model+'.png')
+plt.savefig('result_figures/2d_encoding_'+args.model+'.png')
 plt.show()
-
