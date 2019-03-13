@@ -12,16 +12,30 @@ def save_model(model, optim, save_dir, name):
     torch.save(save_dict, path)
     print('Saved model %s to %s'%(name, path))
 
-def train(args, dataset, model, loss_fn, config, num_overfit=-1):
+def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=None):
     print("Learning rate is %f"%float(config['lr']))
+    
+    """
+    Create optimizer
+    """
     if config['optimizer'] == 'SGD':
         optim = torch.optim.SGD(list(model.parameters()), lr=float(config['lr']))
     elif config['optimizer'] == 'Adam':
         optim = torch.optim.Adam(list(model.parameters()), lr=float(config['lr']))
     else:
         print('Unknown optimizer!')
+    if resume_optim is not None:
+        checkpoint = torch.load(resume_optim)
+        optim.load_state_dict(checkpoint['optimizer_state_dict'])
+        model.load_state_dict(checkpoint['model_state_dict'])
+        print("Model/Optimizer loaded")
+        
     if not 'save_epoch_interval' in config.keys():
         raise KeyError('save_epoch_interval not given in config')
+        
+    """
+    Initialize training parameters
+    """
     overfit = num_overfit > -1
     save_interval = int(config['save_epoch_interval'])
     ##create save folder
@@ -40,6 +54,15 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1):
     if cuda:
         print("CUDA available")
         model.cuda()
+        if resume_optim is not None:
+            for state in optim.state.values():
+                    for k, v in state.items():
+                        if isinstance(v, torch.Tensor):
+                             state[k] = v.cuda()
+        
+    """
+    Initialize visdom
+    """
     use_vis = 'visdom' in config.keys() and config['visdom'] == 'true'
     if use_vis:
         print('Use visdom')
@@ -58,6 +81,11 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1):
     loss_vae = []
     x = []
     div = 1./float(len(dataset) if not overfit else num_overfit)
+    
+    
+    """
+    Actual training loop
+    """
     for epoch in range(epochs):
         print("Starting Epoch %d/%d"%(epoch+1,epochs))
         for i, (data, target) in enumerate(dataset):

@@ -12,6 +12,7 @@ parser.add_argument('--data', type=str, choices=('MNIST', ''), help='Data name t
 parser.add_argument('--config', type=str, help='path to config file', required=True)
 parser.add_argument('--batch_size', type=int, help='specify batch size', default=1000)
 parser.add_argument('--overfit', type=int, default=-1, help='Overfit to number of samples')
+parser.add_argument('--resume_optimization', type=str, default=None, help='If the optimization of a already trained model should be continued give the model path')
 args = parser.parse_args()
 
 
@@ -76,5 +77,5 @@ else:
     raise NotImplementedError('Loss not supported')
     
     
-optim = trainer.train(args, loader, model, loss, config, num_overfit=args.overfit)
+optim = trainer.train(args, loader, model, loss, config, num_overfit=args.overfit, resume_optim=args.resume_optimization)
 
