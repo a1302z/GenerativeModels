@@ -4,7 +4,8 @@ import visdom
 import matplotlib.pyplot as plt
 import datetime
 import numpy as np
-import os
+import os, sys
+import gc
 
 def save_model(model, optim, save_dir, name):
     save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
@@ -12,7 +13,7 @@ def save_model(model, optim, save_dir, name):
     torch.save(save_dict, path)
     print('Saved model %s to %s'%(name, path))
 
-def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=None):
+def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=None, input_size=(1, 28,28)):
     print("Learning rate is %f"%float(config['lr']))
     
     """
@@ -50,6 +51,7 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     except OSError:
         print ('Error: Creating directory. ' + save_dir)
     print("Created save directory at %s"%save_dir)
+    
     cuda = torch.cuda.is_available()
     if cuda:
         print("CUDA available")
@@ -71,16 +73,18 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
         assert vis.check_connection(timeout_seconds=3), 'No connection could be formed quickly'
         plt_dict = dict(name='training loss',ymin=0, xlabel='epoch', ylabel='loss', legend=['train_loss'])
         vis_plot = vis.line(Y=[0],env=vis_env,opts=plt_dict)
-        vis_image = vis.image(np.zeros((1,28,28)),env=vis_env)
+        vis_image = vis.image(np.zeros(input_size),env=vis_env)
         if type(model) == AE.VariationalAutoencoder:
             vae_dict = dict(ymin=0, ymax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
-    log_every = int(len(dataset)/int(config['log_every_dataset_chunk'])) if not overfit else num_overfit
+    log_every = max(1, int(len(dataset)/int(config['log_every_dataset_chunk']))) if not overfit else num_overfit
     epochs = int(config['epochs'])
     loss_log = []
     loss_vae = []
     x = []
     div = 1./float(len(dataset) if not overfit else num_overfit)
+    
+    
     
     
     """

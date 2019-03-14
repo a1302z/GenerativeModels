@@ -33,11 +33,11 @@ loader = torch.utils.data.DataLoader(
                        ])),
                         batch_size=1, shuffle=False)
 if args.model == 'AE':
-    model = AE.Autoencoder()
+    model = AE.Autoencoder((28,28), 2, RGB = False)
 elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(128,2))
+    model = AE.LinearAutoencoder((28,28), 2, RGB = False, hidden_size=(64,2))
 elif args.model == 'VAE':
-    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(128,2))
+    model = AE.VariationalAutoencoder((28,28), 2, RGB = False, hidden_size=(64,2))
 else:
     raise NotImplementedError('Model not supported')
 checkpoint = torch.load(args.model_path)
