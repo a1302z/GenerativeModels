@@ -2,10 +2,11 @@ import torch
 import models.Autoencoder as AE
 import visdom
 import matplotlib.pyplot as plt
-import datetime
+import datetime, time
 import numpy as np
 import os, sys
 import gc
+import shutil
 
 def save_model(model, optim, save_dir, name):
     save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
@@ -19,12 +20,17 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     """
     Create optimizer
     """
+    opt_list = [{'params':model.parameters()}]
+    if type(model) == AE.VariationalAutoencoder:
+        kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
     if config['optimizer'] == 'SGD':
-        optim = torch.optim.SGD(list(model.parameters()), lr=float(config['lr']))
+        optim = torch.optim.SGD(params=opt_list, lr=float(config['lr']))
     elif config['optimizer'] == 'Adam':
-        optim = torch.optim.Adam(list(model.parameters()), lr=float(config['lr']))
+        optim = torch.optim.Adam(params=opt_list, lr=float(config['lr']))
     else:
         print('Unknown optimizer!')
+    ##init model
+    #AE.init(model)
     if resume_optim is not None:
         checkpoint = torch.load(resume_optim)
         optim.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -40,7 +46,7 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     overfit = num_overfit > -1
     save_interval = int(config['save_epoch_interval'])
     ##create save folder
-    timestamp = str(datetime.datetime.now()).replace(' ', '_')
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H:%m')
     path = args.model+'_'+args.data+'_'+timestamp
     if overfit:
         path += '_overfitted'
@@ -48,6 +54,7 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     try:
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
+        shutil.copyfile(args.config, save_dir+'/settings.config')
     except OSError:
         print ('Error: Creating directory. ' + save_dir)
     print("Created save directory at %s"%save_dir)
@@ -56,6 +63,8 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     if cuda:
         print("CUDA available")
         model.cuda()
+        if type(model) == AE.VariationalAutoencoder:
+            kl_loss_weight = kl_loss_weight.cuda()
         if resume_optim is not None:
             for state in optim.state.values():
                     for k, v in state.items():
@@ -81,9 +90,10 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     epochs = int(config['epochs'])
     loss_log = []
     loss_vae = []
+    weight = []
     x = []
     div = 1./float(len(dataset) if not overfit else num_overfit)
-    
+    t1 = None
     
     
     
@@ -91,7 +101,8 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     Actual training loop
     """
     for epoch in range(epochs):
-        print("Starting Epoch %d/%d"%(epoch+1,epochs))
+        print("Starting Epoch %d/%d (%s seconds)"%(epoch+1,epochs, 'N/A' if t1 is None else str(time.time()-t1)))
+        t1 = time.time()
         for i, (data, target) in enumerate(dataset):
             if overfit:
                 if i >= num_overfit:
@@ -105,7 +116,7 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
                 loss_img = loss_fn(prediction, data)
                 ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
                 kl_div = 0.5*torch.sum(mean**2 +torch.exp(log_var) - log_var - 1.0)
-                loss = loss_img + 100*kl_div
+                loss = loss_img + kl_loss_weight*kl_div#/(2*torch.exp(2*kl_loss_weight))+kl_loss_weight
                 loss_vae.append([loss_img.detach().cpu(), kl_div.detach().cpu()])
             else:
                 prediction = model(data)

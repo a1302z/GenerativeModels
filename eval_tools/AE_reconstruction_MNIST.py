@@ -8,7 +8,7 @@ import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
-import models.Autoencoder as AE
+import common.setup as setup
 
 def normalize(vector):
     min_v = torch.min(vector)
@@ -25,21 +25,10 @@ parser.add_argument('--model', type=str, choices=('AE','AE_linear', 'VAE'), requ
 parser.add_argument('--num_pics', type=int, default=5, help='How many pics to show in evaluation?')
 args = parser.parse_args()
 
-loader = torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('data', train=False, download=True,
-                       transform=torchvision.transforms.Compose([
-                           torchvision.transforms.ToTensor(),
-                           torchvision.transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-                        batch_size=1, shuffle=False)
-if args.model == 'AE':
-    model = AE.Autoencoder((28,28), 2, RGB = False)
-elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder((28,28), 2, RGB = False, hidden_size=(64,2))
-elif args.model == 'VAE':
-    model = AE.VariationalAutoencoder((28,28), 2, RGB = False, hidden_size=(64,2))
-else:
-    raise NotImplementedError('Model not supported')
+config_path = os.path.join(os.path.dirname(args.model_path), 'settings.config')
+config = setup.parse_config(config_path)
+loader = setup.create_test_loader(data='MNIST')
+model = setup.create_model(config, args.model)
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
 

@@ -10,7 +10,7 @@ import os,sys,inspect
 currentdir = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir)
-import models.Autoencoder as AE
+import common.setup as setup
 
 
 
@@ -19,20 +19,10 @@ parser.add_argument('--model_path', type=str, required=True, help='path to train
 parser.add_argument('--model', type=str, choices=('AE_linear', 'VAE'), required = True, help='Specify model')
 args = parser.parse_args()
 
-loader = torch.utils.data.DataLoader(
-        torchvision.datasets.MNIST('data', train=False, download=True,
-                       transform=torchvision.transforms.Compose([
-                           torchvision.transforms.ToTensor(),
-                           torchvision.transforms.Normalize((0.1307,), (0.3081,))
-                       ])),
-                        batch_size=1, shuffle=False)
-if args.model == 'AE':
-    raise NotImplementedException('Not possible in this model')
-    #model = AE.Autoencoder()
-elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(128,2))
-elif args.model == 'VAE':
-    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(128,2))
+config_path = os.path.join(os.path.dirname(args.model_path), 'settings.config')
+config = setup.parse_config(config_path)
+loader = setup.create_test_loader(data='MNIST')
+model = setup.create_model(config, args.model)
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
 cuda = torch.cuda.is_available()

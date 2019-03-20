@@ -2,6 +2,15 @@ import torch
 import torch.nn as nn
 
 
+def init(model):
+    print('Initializing model weights')
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
+            nn.init.kaiming_normal_(m.weight.data)
+            if m.bias is not None:
+                nn.init.constant_(m.bias.data, 0)
+
+
 """
 Module wrapper for nn.functional.interpolate
 """
@@ -54,7 +63,7 @@ class UpBlock(nn.Module):
 Shared implementation of convolutional encoder part
 """
 class ConvEncoder(nn.Module):
-    def __init__(self, in_channels, encode_factor, base_channels=16, print_init=True):
+    def __init__(self, in_channels, encode_factor, base_channels=16, print_init=False):
         super(ConvEncoder, self).__init__()
         assert encode_factor > 0, 'Encode factor must be > 0'
         
@@ -86,7 +95,7 @@ class ConvEncoder(nn.Module):
 Shared implementation of convolutional decoder part
 """
 class ConvDecoder(nn.Module):
-    def __init__(self, input_size, encode_factor, out_channels, base_channels=16, print_init=True):
+    def __init__(self, input_size, encode_factor, out_channels, base_channels=16, print_init=False):
         super(ConvDecoder, self).__init__()
         self.input_size = input_size
         assert encode_factor > 0, 'Encode factor must be > 0'
@@ -128,16 +137,16 @@ Fully Convolutional autoencoder
  -> Combination of ConvEncoder and ConvDecoder
 """
 class Autoencoder(nn.Module):
-    def __init__(self, input_size, encode_factor, RGB = True, base_channels=16):
+    def __init__(self, input_size, encode_factor, RGB = True, base_channels=16, print_init=False):
         super(Autoencoder, self).__init__()
         self.input_size = input_size
         if RGB:
             channels = 3
         else: 
             channels = 1
-        self.encoder = ConvEncoder(channels, encode_factor, base_channels=base_channels)
+        self.encoder = ConvEncoder(channels, encode_factor, base_channels=base_channels, print_init=print_init)
         
-        self.decoder = ConvDecoder(input_size, encode_factor, channels, base_channels=base_channels)
+        self.decoder = ConvDecoder(input_size, encode_factor, channels, base_channels=base_channels, print_init=print_init)
         
     def forward(self, x):
         if len(x.size()) < 4:
@@ -201,7 +210,7 @@ class LinearAutoencoder(nn.Module):
         #print(x.size())
         x = self.encoder(x)
         self.s = x.size()
-        print(self.s)
+        #print(self.s)
         x = x.view(self.s[0], -1)
         x = self.tohidden(x)
         hidden = x

@@ -28,9 +28,9 @@ if args.model == 'AE':
     raise NotImplementedException('Not possible in this model')
     #model = AE.Autoencoder()
 elif args.model == 'AE_linear':
-    model = AE.LinearAutoencoder(input_size=(28,28), hidden_size=(128,2))
+    model = AE.LinearAutoencoder((28,28),2, RGB = False,hidden_size=(64,2))
 elif args.model == 'VAE':
-    model = AE.VariationalAutoencoder(input_size=(28,28), hidden_size=(128,2))
+    model = AE.VariationalAutoencoder((28,28),2, RGB = False,hidden_size=(64,2))
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
 cuda = torch.cuda.is_available()
