@@ -19,7 +19,8 @@ def parse_config(path):
 def create_model(config, model_name):
     RGB = config['RGB'] == 'True'
     input_size = tuple(map(int, config['input_size'].split('x')))
-    hidden_dim_size = tuple(map(int, config['hidden_dim_size'].split(',')))
+    if 'hidden_dim_size' in config:
+        hidden_dim_size = tuple(map(int, config['hidden_dim_size'].split(',')))
     encode_factor = int(config['encode_factor'])
     base_channels = int(config['base_channels'])
     """
@@ -44,12 +45,12 @@ def create_model(config, model_name):
     elif model_name == 'AE_linear':
         model = AE.LinearAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
     elif model_name == 'VAE':
-        model = AE.VariationalAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
+        model = AE.VariationalAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels, print_init=False)
     else:
         raise NotImplementedError('The model you specified is not implemented yet')
     return model
 
-def create_dataset_loader(config, data, overfit=-1):
+def create_dataset_loader(config, data, overfit=-1, directory='data'):
     ##Create datasetloader
     loader = None
     overfit = overfit>-1
@@ -57,7 +58,7 @@ def create_dataset_loader(config, data, overfit=-1):
         config['batch_size']=1
     if data == 'MNIST':
         loader = torch.utils.data.DataLoader(
-            torchvision.datasets.MNIST('data', train=True, download=True,
+            torchvision.datasets.MNIST(directory, train=True, download=True,
                            transform=torchvision.transforms.Compose([
                                torchvision.transforms.ToTensor(),
                                torchvision.transforms.Normalize((0.1307,), (0.3081,))
@@ -79,15 +80,26 @@ def create_dataset_loader(config, data, overfit=-1):
     print('Given %d training points (batch size: %d)'%(len(loader), int(config['batch_size'])))
     return loader
 
-def create_test_loader(data='MNIST'):
+def create_test_loader(data='MNIST', directory='data'):
     if data == 'MNIST':
         loader = torch.utils.data.DataLoader(
-            torchvision.datasets.MNIST('data', train=False, download=True,
+            torchvision.datasets.MNIST(directory, train=False, download=True,
                            transform=torchvision.transforms.Compose([
                                torchvision.transforms.ToTensor(),
                                torchvision.transforms.Normalize((0.1307,), (0.3081,))
                            ])),
                             batch_size=1, shuffle=False)
+    elif data == 'CelebA':
+        data_path = 'data/CelebA/'
+        celeba = torchvision.datasets.ImageFolder(
+            root=data_path,
+            transform=torchvision.transforms.ToTensor()
+        )
+        loader = torch.utils.data.DataLoader(
+            celeba,
+            batch_size=1,
+            shuffle=False
+        )
     else:
         raise NotImplementedError('Test dataset for specified dataset not implemented yet')
     
