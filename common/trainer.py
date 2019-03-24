@@ -23,7 +23,7 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
     opt_list = list(model.parameters())
     if type(model) == AE.VariationalAutoencoder:
         #kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
-        weighted_loss = AE.WeightedMultiLoss(init_values=[float(config['IMG_loss_weight']), float(config['VAE_loss_weight'])])
+        weighted_loss = AE.WeightedMultiLoss(init_values=[float(config['IMG_loss_weight']), float(config['VAE_loss_weight'])], learn_weights=config['learn_loss_weights']=='True')
         opt_list = list(opt_list +list(weighted_loss.parameters()))
     if config['optimizer'] == 'SGD':
         optim = torch.optim.SGD(params=opt_list, lr=float(config['lr']))
@@ -147,8 +147,8 @@ def train(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=No
                         vis_vae = vis.line(win=vis_vae, X=x,Y=loss_vae, env=vis_env, opts=vae_dict)
                         vis_weights = vis.line(win=vis_weights, X=x, Y=weight, env=vis_env, opts=vae_w_dict)
                     vis.save(envs=[vis_env])
-        if epoch % save_interval == 0 and epoch > 0:
-            save_model(model, optim, save_dir, 'epoch_'+str(epoch))
+        if ((epoch + 1) % save_interval) == 0:
+            save_model(model, optim, save_dir, 'epoch_'+str(epoch+1))
     
         
     save_model(model, optim, save_dir, 'final_model')      

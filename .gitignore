@@ -11,3 +11,6 @@ result_figures/
 
 models/__pycache__/Autoencoder.cpython-37.pyc
 
+**/*profil*
+!**/*profil*.sh
+git-readme-preview.ipynb

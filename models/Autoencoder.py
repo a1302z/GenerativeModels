@@ -330,10 +330,10 @@ Implementation of loss function to weight losses according to Alex Kendalls pape
 "Multi-Task Learning Using Uncertainty to Weigh Lossesfor Scene Geometry and Semantics"
 """
 class WeightedMultiLoss(nn.Module):
-    def __init__(self, init_values=[1.0,1.0]):
+    def __init__(self, init_values=[1.0,1.0], learn_weights=True):
         super(WeightedMultiLoss, self).__init__()
-        self.weight0 = nn.Parameter(torch.tensor(init_values[0], dtype=torch.float), requires_grad=True)
-        self.weight1 = nn.Parameter(torch.tensor(init_values[1], dtype=torch.float), requires_grad=True)
+        self.weight0 = nn.Parameter(torch.tensor(init_values[0], dtype=torch.float), requires_grad=learn_weights)
+        self.weight1 = nn.Parameter(torch.tensor(init_values[1], dtype=torch.float), requires_grad=learn_weights)
         
     def forward(self, x):
         l0 = (x[0] / torch.exp(2 * self.weight0) + self.weight0)

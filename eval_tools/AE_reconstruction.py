@@ -40,8 +40,6 @@ if cuda:
 
 img_list = []
 
-#for i, (data, target) in enumerate(loader):
-#    if i % int(len(loader)/args.num_pics) == 0:
 for i, (data, target) in enumerate(loader):
     print('Image %d/%d (Target: %d)'%(i,args.num_pics, target[0]))
     img_list.append(data.squeeze(0))
@@ -54,22 +52,14 @@ for i, (data, target) in enumerate(loader):
     else:
         reconstructed = model(data)
      
-    #hidden = model.encode(data)
-    #print(data.squeeze(0).size())
-    #print(reconstructed.squeeze(0).size())
     rec_img = reconstructed.squeeze(0).detach().cpu()
-    diff = torch.abs(reconstructed - data).squeeze(0).detach().cpu()
-    #data_img = normalize(data.squeeze(0)).cpu()
-    #mi, ma = data_img.min(), data_img.max()
-    #print("(data) Min: %f\t Max: %f"%(mi,ma))
-    #mi, ma = rec_img.numpy().min(), rec_img.numpy().max()
-    #print("(recu) Min: %f\t Max: %f"%(mi,ma))
+    #diff = torch.abs(reconstructed - data).squeeze(0).detach().cpu()
     img_list.append(rec_img)
-    img_list.append(diff)
+    #img_list.append(diff)
     if i+1 >= args.num_pics:
         break
 
-img = make_grid(img_list, nrow=3, scale_each=True)
+img = make_grid(img_list, nrow=2, scale_each=True)
 save_image(copy.deepcopy(img), 'result_figures/'+args.model+'_'+args.data+'_reconstruction.png')
 if args.data == 'MNIST':
     img = np.sum(img.numpy(), axis=0)
