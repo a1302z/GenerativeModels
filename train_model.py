@@ -29,7 +29,10 @@ model = setup.create_model(config, args.model)
 ## Loss function
 loss = setup.create_loss(config)
 
-    
-optim = trainer.train(args, loader, model, loss, config, num_overfit=args.overfit, resume_optim=args.resume_optimization, 
+if args.model in ['AE', 'AE_linear', 'VAE']:
+    optim = trainer.train_AE(args, loader, model, loss, config, num_overfit=args.overfit, resume_optim=args.resume_optimization, 
                       input_size=(3 if RGB else 1, input_size[0], input_size[1]))
-
+elif args.model in ['GAN']:
+    trainer.train_GAN(args, model, config, loader, loss, num_overfit=args.overfit)
+else:
+    raise NotImplementedError('Model unknown')

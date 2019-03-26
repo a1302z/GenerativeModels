@@ -2,6 +2,7 @@
 import torch 
 import torchvision
 import models.Autoencoder as AE
+import models.GAN as GAN
 
 
 def parse_config(path):
@@ -46,6 +47,8 @@ def create_model(config, model_name):
         model = AE.LinearAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
     elif model_name == 'VAE':
         model = AE.VariationalAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels, print_init=False)
+    elif model_name == 'GAN':
+        model = GAN.GAN()
     else:
         raise NotImplementedError('The model you specified is not implemented yet')
     return model

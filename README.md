@@ -20,8 +20,8 @@ This model decreases the image resolution while enlarging the number of channels
 2. Convolutional model with linear hidden dimension \
 The model is based on the Fully Convolutional model. However, it enforces a stronger encoding by having a n-dimensional hidden vector as bottleneck where n is small (e.g. 16). This is done by having a Fully Connected Layer from the convolutional representation and one more back. \
 <b> Reconstructions results for Autoencoder with hidden vector </b> \
-![Linear autoencoder result](result_figures/AE_linear_MNIST_reconstruction.png) \ 
-![Linear autoencoder result](result_figures/AE_linear_CelebA_reconstruction.png) \ 
+![Linear autoencoder result](result_figures/AE_linear_MNIST_reconstruction.png) \
+![Linear autoencoder result](result_figures/AE_linear_CelebA_reconstruction.png) \
 <!--- Encoding visualized in hidden space \
 ![Linear autoencoder hidden space](result_figures/2d_encoding_AE_linear.png) --->
 #### t-SNE representation of hidden space
