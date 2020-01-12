@@ -258,8 +258,8 @@ class VariationalAutoencoder(nn.Module):
         for i in range(encode_factor):
             self.h_hidden = int(self.h_hidden/2)
             self.w_hidden = int(self.w_hidden/2)
-        self.h_hidden -= 3
-        self.w_hidden -= 3
+        self.h_hidden -= 3 if encode_factor > 1 else 2
+        self.w_hidden -= 3 if encode_factor > 1 else 2
         #width*height*channels
         hidden_channels = base_channels * (2**(encode_factor-1))
         if print_init:
@@ -285,6 +285,7 @@ class VariationalAutoencoder(nn.Module):
         #print(x.size())
         x = self.encoder(x)
         self.s = x.size()
+        #print(self.s)
         x = x.view(self.s[0], -1)
         x = self.hidden(x)
         mean = self.mean(x)
@@ -322,3 +323,22 @@ class VariationalAutoencoder(nn.Module):
         x = x.view(self.s)
         x = self.decoder(x)
         return x
+    
+
+"""
+Implementation of loss function to weight losses according to Alex Kendalls paper:
+"Multi-Task Learning Using Uncertainty to Weigh Lossesfor Scene Geometry and Semantics"
+"""
+class WeightedMultiLoss(nn.Module):
+    def __init__(self, init_values=[1.0,1.0], learn_weights=True):
+        super(WeightedMultiLoss, self).__init__()
+        self.weight0 = nn.Parameter(torch.tensor(init_values[0], dtype=torch.float), requires_grad=learn_weights)
+        self.weight1 = nn.Parameter(torch.tensor(init_values[1], dtype=torch.float), requires_grad=learn_weights)
+        
+    def forward(self, x):
+        l0 = (x[0] / torch.exp(2 * self.weight0) + self.weight0)
+        l1 = (x[1] / torch.exp(2 * self.weight1) + self.weight1)
+        return [l0, l1]
+        
+
+        

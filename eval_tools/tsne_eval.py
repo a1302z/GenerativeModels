@@ -16,12 +16,14 @@ import common.setup as setup
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', type=str, required=True, help='path to trained autoencoder')
+parser.add_argument('--data', type=str, default='MNIST', choices=('MNIST', 'CelebA'), help='Data name to be used')
 parser.add_argument('--model', type=str, choices=('AE_linear', 'VAE'), required = True, help='Specify model')
+parser.add_argument('--limit_datapoints', type=int, default=-1, help='limit number of data points')
 args = parser.parse_args()
 
 config_path = os.path.join(os.path.dirname(args.model_path), 'settings.config')
 config = setup.parse_config(config_path)
-loader = setup.create_test_loader(data='MNIST')
+loader = setup.create_test_loader(data=args.data)
 model = setup.create_model(config, args.model)
 checkpoint = torch.load(args.model_path)
 model.load_state_dict(checkpoint['model_state_dict'])
@@ -44,6 +46,8 @@ for i, (data, target) in enumerate(loader):
     hidden = hidden.detach().cpu().numpy()
     hidden_list.append(hidden)
     targets.append(target[0])
+    if args.limit_datapoints >= 0 and i >= args.limit_datapoints:
+        break
 
 hidden_list = np.vstack(hidden_list)
 print('Computing tsne representation')
@@ -61,6 +65,6 @@ for g in np.unique(targets):
     ax.scatter(X_embedded[ix,0], X_embedded[ix,1], color = cm(g/10.0), label = g, alpha=0.5)
 ax.legend()
 
-plt.savefig('result_figures/tsne_'+args.model+'.png')
+plt.savefig('result_figures/tsne_'+args.model+'_'+args.data+'.png')
 plt.show()
 

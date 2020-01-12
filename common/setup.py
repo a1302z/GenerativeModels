@@ -57,7 +57,6 @@ def create_model(config, model_name):
     return model
 
 
-
 def create_dataset_loader(config, data, overfit=-1, ganmode=False):
     ##Create datasetloader
     loader = None
@@ -92,15 +91,26 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
     print('Given %d training points (batch size: %d)'%(len(loader), int(config['batch_size'])))
     return loader
 
-def create_test_loader(data='MNIST'):
+def create_test_loader(data='MNIST', directory='data'):
     if data == 'MNIST':
         loader = torch.utils.data.DataLoader(
-            torchvision.datasets.MNIST('data', train=False, download=True,
+            torchvision.datasets.MNIST(directory, train=False, download=True,
                            transform=torchvision.transforms.Compose([
                                torchvision.transforms.ToTensor(),
                                torchvision.transforms.Normalize((0.1307,), (0.3081,))
                            ])),
                             batch_size=1, shuffle=False)
+    elif data == 'CelebA':
+        data_path = 'data/CelebA/'
+        celeba = torchvision.datasets.ImageFolder(
+            root=data_path,
+            transform=torchvision.transforms.ToTensor()
+        )
+        loader = torch.utils.data.DataLoader(
+            celeba,
+            batch_size=1,
+            shuffle=False
+        )
     else:
         raise NotImplementedError('Test dataset for specified dataset not implemented yet')
     

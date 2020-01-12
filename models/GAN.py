@@ -34,10 +34,28 @@ class VanillaGenerator(nn.Module):
         x = self.generate(x)
         x = x.view(-1, 1, 28, 28)
         return x
-    
+
 class VanillaDiscriminator(nn.Module):
     def __init__(self):
         super(VanillaDiscriminator, self).__init__()
+        self.discriminate = nn.Sequential(
+            nn.Linear(784, 512),
+            nn.LeakyReLU(),
+            nn.Linear(512, 256),
+            nn.LeakyReLU(),
+            nn.Linear(256, 128),
+            nn.LeakyReLU(),
+            nn.Linear(128, 1),
+            nn.Sigmoid()
+        )
+        
+    def forward(self, x):
+        x = x.view(x.size(0), -1)
+        return self.discriminate(x)
+    
+class DCDiscriminator(nn.Module):
+    def __init__(self):
+        super(DCDiscriminator, self).__init__()
         self.discriminate = nn.Sequential(
             nn.Conv2d(1, 32, 3),
             nn.LeakyReLU(),
@@ -74,3 +92,4 @@ if __name__ == '__main__':
     disc = VanillaDiscriminator().to('cuda')
     summary(disc, (1,28,28))
     
+

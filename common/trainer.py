@@ -9,11 +9,11 @@ import gc
 import shutil
 import tqdm
 
-def save_model(model, optim, save_dir, name):
-    save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
+def save_model(save_dict, save_dir, name):
     path = save_dir + '/'+name
     torch.save(save_dict, path)
     #print('Saved model %s to %s'%(name, path))
+
 
 def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=None, input_size=(1, 28,28)):
     print("Learning rate is %f"%float(config['lr']))
@@ -21,9 +21,11 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     """
     Create optimizer
     """
-    opt_list = [{'params':model.parameters()}]
+    opt_list = list(model.parameters())
     if type(model) == AE.VariationalAutoencoder:
-        kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
+        #kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
+        weighted_loss = AE.WeightedMultiLoss(init_values=[float(config['IMG_loss_weight']), float(config['VAE_loss_weight'])], learn_weights=config['learn_loss_weights']=='True')
+        opt_list = list(opt_list +list(weighted_loss.parameters()))
     if config['optimizer'] == 'SGD':
         optim = torch.optim.SGD(params=opt_list, lr=float(config['lr']))
     elif config['optimizer'] == 'Adam':
@@ -65,7 +67,8 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         print("CUDA available")
         model.cuda()
         if type(model) == AE.VariationalAutoencoder:
-            kl_loss_weight = kl_loss_weight.cuda()
+            #kl_loss_weight = kl_loss_weight.cuda()
+            weighted_loss.cuda()
         if resume_optim is not None:
             for state in optim.state.values():
                     for k, v in state.items():
@@ -81,12 +84,15 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         vis_env = 'training'
         vis = visdom.Visdom()
         assert vis.check_connection(timeout_seconds=3), 'No connection could be formed quickly'
-        plt_dict = dict(name='training loss',ymin=0, xlabel='epoch', ylabel='loss', legend=['train_loss'])
+        plt_dict = dict(name='training loss',ytickmax=10, xlabel='epoch', ylabel='loss', legend=['train_loss'])
         vis_plot = vis.line(Y=[0],env=vis_env,opts=plt_dict)
         vis_image = vis.image(np.zeros(input_size),env=vis_env)
         if type(model) == AE.VariationalAutoencoder:
-            vae_dict = dict(ymin=0, ymax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
+            vae_dict = dict(ytickmax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
+            vae_w_dict = dict(ymin=0, ymax=10, legend=['Weight Image', 'Weight KL-div'], xlabel='epoch', ylabel='value')
+            vis_weights = vis.line(Y=[0,0], env=vis_env, opts=vae_w_dict)
+            
     log_every = max(1, int(len(dataset)/int(config['log_every_dataset_chunk']))) if not overfit else num_overfit
     epochs = int(config['epochs'])
     loss_log = []
@@ -102,7 +108,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     Actual training loop
     """
     for epoch in range(epochs):
-        print("Starting Epoch %d/%d (%s seconds)"%(epoch+1,epochs, 'N/A' if t1 is None else str(time.time()-t1).format('%.1f')))
+        print("Starting Epoch %d/%d (%s seconds)"%(epoch+1,epochs, 'N/A' if t1 is None else '{:.2f}'.format(time.time()-t1)))
         t1 = time.time()
         for i, (data, target) in enumerate(dataset):
             if overfit:
@@ -117,8 +123,11 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
                 loss_img = loss_fn(prediction, data)
                 ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
                 kl_div = 0.5*torch.sum(mean**2 +torch.exp(log_var) - log_var - 1.0)
-                loss = loss_img + kl_loss_weight*kl_div#/(2*torch.exp(2*kl_loss_weight))+kl_loss_weight
+                #loss = loss_img + kl_loss_weight*kl_div#/(2*torch.exp(2*kl_loss_weight))+kl_loss_weight
+                l = weighted_loss([loss_img, kl_div])
+                loss = sum(l)
                 loss_vae.append([loss_img.detach().cpu(), kl_div.detach().cpu()])
+                weight.append([weighted_loss.weight0.detach().cpu(), weighted_loss.weight1.detach().cpu()])
             else:
                 prediction = model(data)
                 loss = loss_fn(prediction, data)
@@ -129,20 +138,19 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
             if i % log_every == 0:
                 print("  Loss after %d/%d iterations: %f"%(i,len(dataset) if not overfit else num_overfit,loss))
                 if use_vis:
-                    #x = np.asarray([0]) if i == 0 and epoch==0 else np.asarray(range(0,epoch*(len(dataset) if not overfit else num_overfit)+i+1))
-                    y = np.asarray(loss_log)
                     vis_plot = vis.line(win=vis_plot,X=x,Y=loss_log, env=vis_env, opts=plt_dict)
                     img = prediction.cpu()
                     img = img if img.shape[0] ==1 else img[0]
                     vis_image = vis.image(img,win=vis_image, env=vis_env)
                     if type(model) == AE.VariationalAutoencoder:
                         vis_vae = vis.line(win=vis_vae, X=x,Y=loss_vae, env=vis_env, opts=vae_dict)
+                        vis_weights = vis.line(win=vis_weights, X=x, Y=weight, env=vis_env, opts=vae_w_dict)
                     vis.save(envs=[vis_env])
-        if epoch % save_interval == 0 and epoch > 0:
-            save_model(model, optim, save_dir, 'epoch_'+str(epoch))
+        if ((epoch + 1) % save_interval) == 0:
+            save_model({'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}, save_dir, 'epoch_'+str(epoch+1))
     
         
-    save_model(model, optim, save_dir, 'final_model')      
+    save_model({'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}, save_dir, 'final_model')      
     return optim
 
 def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_optim=None, input_size=(1, 28,28)):
