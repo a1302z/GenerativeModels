@@ -1,14 +1,8 @@
 import torch
 import torch.nn as nn
+from models.common import init
 
 
-def init(model):
-    print('Initializing model weights')
-    for m in model.modules():
-        if isinstance(m, nn.Conv2d) or isinstance(m, nn.Linear):
-            nn.init.kaiming_normal_(m.weight.data)
-            if m.bias is not None:
-                nn.init.constant_(m.bias.data, 0)
 
 
 """

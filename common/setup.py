@@ -5,7 +5,7 @@ import models.Autoencoder as AE
 import models.GAN as GAN
 
 
-def parse_config(path):
+"""def parse_config(path):
     config = {}
     with open(path, 'r') as config_file:
         lines = config_file.readlines()
@@ -15,14 +15,17 @@ def parse_config(path):
             config[ls[0]] = ls[1]
     print('Parsed config:\n  %s'%str(config))
     return config
-
+"""
 
 def create_model(config, model_name):
-    RGB = config['RGB'] == 'True' if 'RGB' in config else None
-    input_size = tuple(map(int, config['input_size'].split('x'))) if 'input_size' in config else None
-    hidden_dim_size = tuple(map(int, config['hidden_dim_size'].split(','))) if 'hidden_dim_size' in config else None
-    encode_factor = int(config['encode_factor']) if 'encode_factor' in config else None
-    base_channels = int(config['base_channels']) if 'base_channels' in config else None
+    section_training = config['TRAINING']
+    RGB = section_training.getboolean('RGB') if 'RGB' in section_training else None
+    input_size = tuple(map(int, section_training.get('input_size').split('x'))) if 'input_size' in section_training else None
+    section_hyper = config['HYPERPARAMS']
+    hidden_dim_size = tuple(map(int, section_hyper.get('hidden_dim_size').split(','))) if 'hidden_dim_size' in section_hyper else None
+    encode_factor = section_hyper.getint('encode_factor', None)
+    base_channels = section_hyper.getint('base_channels', None)
+    latent_dim = section_hyper.getint('latent_dim', 10)
     """
     if args.data == 'MNIST':
         input_size = (28,28)
@@ -47,10 +50,14 @@ def create_model(config, model_name):
     elif model_name == 'VAE':
         model = AE.VariationalAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
     elif model_name == 'VanillaGAN':
-        latent_dim = int(config.get('latent_dim', 10))
+        latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))
         gen = GAN.VanillaGenerator(input_dim = latent_dim)
         disc = GAN.VanillaDiscriminator()
+        model = (gen, disc)
+    elif model_name == 'DCGAN':
+        gen = GAN.DCGenerator(input_dim = latent_dim)
+        disc = GAN.DCDiscriminator()
         model = (gen, disc)
     else:
         raise NotImplementedError('The model you specified is not implemented yet')
@@ -60,9 +67,8 @@ def create_model(config, model_name):
 def create_dataset_loader(config, data, overfit=-1, ganmode=False):
     ##Create datasetloader
     loader = None
-    overfit = overfit>-1
-    #if overfit:
-    #    config['batch_size']=1
+    if overfit:
+        config['HYPERPARAMS']['batch_size']=str(overfit)
     if data == 'MNIST':
         tfs = [
             torchvision.transforms.ToTensor(),
@@ -74,7 +80,9 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
         loader = torch.utils.data.DataLoader(
             torchvision.datasets.MNIST('data', train=True, download=True,
                            transform=torchvision.transforms.Compose(tfs)),
-                            batch_size=int(config['batch_size']), shuffle=not overfit)
+            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=overfit>-1,
+            num_workers = 4
+        )
     elif data == 'CelebA':
         data_path = 'data/CelebA/'
         celeba = torchvision.datasets.ImageFolder(
@@ -84,11 +92,12 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
         loader = torch.utils.data.DataLoader(
             celeba,
             batch_size=int(config['batch_size']),
-            shuffle=not overfit
+            shuffle=not overfit, 
+            num_workers=4
         )
     else: 
         raise NotImplementedError('The dataset you specified is not implemented')
-    print('Given %d training points (batch size: %d)'%(len(loader), int(config['batch_size'])))
+    print('Given %d training points (batch size: %d)'%(len(loader), config.getint('HYPERPARAMS', 'batch_size')))
     return loader
 
 def create_test_loader(data='MNIST', directory='data'):
@@ -119,13 +128,13 @@ def create_test_loader(data='MNIST', directory='data'):
 
 def create_loss(config):
     loss = None
-    if config['loss'] == 'L1':
+    if config.get('HYPERPARAMS', 'loss') == 'L1':
         loss = torch.nn.functional.l1_loss
-    elif config['loss'] in ['MSE', 'L2']:
+    elif config.get('HYPERPARAMS', 'loss') in ['MSE', 'L2']:
         loss = torch.nn.functional.mse_loss
-    elif config['loss'] == 'BCE':
+    elif config.get('HYPERPARAMS', 'loss') == 'BCE':
         loss = torch.nn.BCELoss(reduction='mean')
-    elif config['loss'] == 'CrossEntropy':
+    elif config.get('HYPERPARAMS', 'loss') == 'CrossEntropy':
         loss = torch.nn.CrossEntropyLoss()
     else:
         raise NotImplementedError('Loss not supported')

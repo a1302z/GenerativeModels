@@ -8,15 +8,18 @@ import os, sys
 import gc
 import shutil
 import tqdm
+import warnings
 
-def save_model(save_dict, save_dir, name):
+def save_model(model, optim, save_dir, name):
+    save_dict = {'model_state_dict': model.state_dict(), 'optimizer_state_dict': optim.state_dict()}
     path = save_dir + '/'+name
     torch.save(save_dict, path)
     #print('Saved model %s to %s'%(name, path))
 
 
 def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim=None, input_size=(1, 28,28)):
-    print("Learning rate is %f"%float(config['lr']))
+    lr=config.getfloat('HYPERPARAMS', 'lr')
+    print("Learning rate is %f"%lr)
     
     """
     Create optimizer
@@ -24,12 +27,12 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     opt_list = list(model.parameters())
     if type(model) == AE.VariationalAutoencoder:
         #kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
-        weighted_loss = AE.WeightedMultiLoss(init_values=[float(config['IMG_loss_weight']), float(config['VAE_loss_weight'])], learn_weights=config['learn_loss_weights']=='True')
+        weighted_loss = AE.WeightedMultiLoss(init_values=[config.getfloat('HYPERPARAMS', 'IMG_loss_weight'), config.getfloat('HYPERPARAMS', 'VAE_loss_weight')], learn_weights=config.getboolean('HYPERPARAMS', 'learn_loss_weights'))
         opt_list = list(opt_list +list(weighted_loss.parameters()))
     if config['optimizer'] == 'SGD':
-        optim = torch.optim.SGD(params=opt_list, lr=float(config['lr']))
+        optim = torch.optim.SGD(params=opt_list, lr=lr)
     elif config['optimizer'] == 'Adam':
-        optim = torch.optim.Adam(params=opt_list, lr=float(config['lr']))
+        optim = torch.optim.Adam(params=opt_list, lr=lr)
     else:
         print('Unknown optimizer!')
     ##init model
@@ -40,14 +43,12 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         model.load_state_dict(checkpoint['model_state_dict'])
         print("Model/Optimizer loaded")
         
-    if not 'save_epoch_interval' in config.keys():
-        raise KeyError('save_epoch_interval not given in config')
         
     """
     Initialize training parameters
     """
     overfit = num_overfit > -1
-    save_interval = int(config['save_epoch_interval'])
+    save_interval = config.getint('TRAINING', 'save_epoch_interval', fallback=10)
     ##create save folder
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M')
     path = args.model+'_'+args.data+'_'+timestamp
@@ -78,10 +79,10 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     """
     Initialize visdom
     """
-    use_vis = 'visdom' in config.keys() and config['visdom'] == 'true'
+    use_vis = config.getboolean('TRAINING', 'visdom', fallback=True)
     if use_vis:
         print('Use visdom')
-        vis_env = 'training'
+        vis_env = 'training/{:s}_{:s}_{:s}'.format(args.model, args.data, timestamp)
         vis = visdom.Visdom()
         assert vis.check_connection(timeout_seconds=3), 'No connection could be formed quickly'
         plt_dict = dict(name='training loss',ytickmax=10, xlabel='epoch', ylabel='loss', legend=['train_loss'])
@@ -93,8 +94,10 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
             vae_w_dict = dict(ymin=0, ymax=10, legend=['Weight Image', 'Weight KL-div'], xlabel='epoch', ylabel='value')
             vis_weights = vis.line(Y=[0,0], env=vis_env, opts=vae_w_dict)
             
-    log_every = max(1, int(len(dataset)/int(config['log_every_dataset_chunk']))) if not overfit else num_overfit
-    epochs = int(config['epochs'])
+    log_every = max(1, int(len(dataset)/config.getint('TRAINING', 'log_every_dataset_chunk', fallback=5))) if not overfit else num_overfit
+    if 'epochs' not in config['HYPERPARAMS']:
+        warnings.warn('Number of epochs not specified in config - Use 20 as default', Warning)
+    epochs = config.getint('HYPERPARAMS', 'epochs', fallback=20)
     loss_log = []
     loss_vae = []
     weight = []
@@ -154,43 +157,43 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     return optim
 
 def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_optim=None, input_size=(1, 28,28)):
-    print("Learning rate is %f"%float(config['lr']))
+    lr=config.getfloat('HYPERPARAMS', 'lr')
+    print("Learning rate is %f"%lr)
     
     """
     Create optimizer
     """
     gen_opt_list = [{'params':gen.parameters()}]
     disc_opt_list = [{'params':disc.parameters()}]
-    if config['disc_optimizer'] == 'SGD':
-        disc_optim = torch.optim.SGD(params=disc_opt_list, lr=float(config['lr']))
-    elif config['disc_optimizer'] == 'Adam':
-        disc_optim = torch.optim.Adam(params=disc_opt_list, lr=float(config['lr']))
+    if config.get('HYPERPARAMS', 'disc_optimizer') == 'SGD':
+        disc_optim = torch.optim.SGD(params=disc_opt_list, lr=lr)
+    elif config.get('HYPERPARAMS', 'disc_optimizer') == 'Adam':
+        disc_optim = torch.optim.Adam(params=disc_opt_list, lr=lr)
     else:
         raise NotImplementedError('Unknown optimizer!')
-    if config['gen_optimizer'] == 'SGD':
-        gen_optim = torch.optim.SGD(params=gen_opt_list, lr=float(config['lr']))
-    elif config['gen_optimizer'] == 'Adam':
-        gen_optim = torch.optim.Adam(params=gen_opt_list, lr=float(config['lr']))
+    if config.get('HYPERPARAMS', 'gen_optimizer') == 'SGD':
+        gen_optim = torch.optim.SGD(params=gen_opt_list, lr=lr)
+    elif config.get('HYPERPARAMS', 'gen_optimizer') == 'Adam':
+        gen_optim = torch.optim.Adam(params=gen_opt_list, lr=lr)
     else:
         raise NotImplementedError('Unknown optimizer!')
     ##init model
     if resume_optim is not None:
-        checkpoint_gen = torch.load('gen_{:s}'.format(resume_optim))
+        path, name = os.path.split(resume_optim)
+        checkpoint_gen = torch.load(os.path.join(path, 'gen_{:s}').format(name))
         gen_optim.load_state_dict(checkpoint_gen['optimizer_state_dict'])
         gen.load_state_dict(checkpoint_gen['model_state_dict'])
-        checkpoint_disc = torch.load('disc_{:s}.format(resume_optim)')
+        checkpoint_disc = torch.load(os.path.join(path, 'disc_{:s}'.format(name)))
         disc_optim.load_state_dict(checkpoint_disc['optimizer_state_dict'])
         disc.load_state_dict(checkpoint_disc['model_state_dict'])
         print("Model/Optimizer loaded")
         
-    if not 'save_epoch_interval' in config.keys():
-        raise KeyError('save_epoch_interval not given in config')
         
     """
     Initialize training parameters
     """
     overfit = num_overfit > -1
-    save_interval = int(config['save_epoch_interval'])
+    save_interval = config.getint('TRAINING', 'save_epoch_interval', fallback=10)
     ##create save folder
     timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M')
     path = '{:s}_{:s}_{:s}'.format(args.model, args.data, timestamp)
@@ -217,14 +220,14 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
                     for k, v in state.items():
                         if isinstance(v, torch.Tensor):
                              state[k] = v.cuda()
-    gen.to(device)
-    disc.to(device)
+    gen.to(device).train()
+    disc.to(device).train()
     
     
     """
     Initialize visdom
     """
-    use_vis = 'visdom' in config.keys() and config['visdom'] == 'true'
+    use_vis = config.getboolean('TRAINING', 'visdom', fallback=True)
     if use_vis:
         print('Use visdom')
         vis_env = 'training'
@@ -233,14 +236,21 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
         plt_dict = dict(name='loss', xlabel='epoch', ylabel='loss', legend=['gen loss', 'disc loss'])
         vis_plot = vis.line(X = [0, 0], Y=[0,0],env=vis_env,opts=plt_dict)
         vis_image = vis.image(np.zeros(input_size),env=vis_env)
-    log_every = max(1, int(len(dataset)/int(config['log_every_dataset_chunk']))) if not overfit else num_overfit
-    epochs = int(config['epochs'])
+    log_every = max(1, int(len(dataset)/config.getint('TRAINING', 'log_every_dataset_chunk', fallback=5))) if not overfit else num_overfit
+    if 'epochs' not in config['HYPERPARAMS']:
+        warnings.warn('Number of epochs not specified in config - Use 20 as default', Warning)
+    epochs = config.getint('HYPERPARAMS', 'epochs', fallback=20)
     disc_log = []
     gen_log = []
     x = []
     div = 1./float(len(dataset) if not overfit else num_overfit)
+    L = len(dataset) if not overfit else num_overfit
     t1 = None
-    latent_dim = int(config.get('latent_dim', 10))
+    latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
+    flip_prob = config.getfloat('GAN_HACKS', 'flip_prob', fallback=0.9)
+    noise_factor = config.getfloat('GAN_HACKS', 'noise_factor', fallback=0.1)
+    noisy_labels = config.getboolean('GAN_HACKS', 'noisy_labels', fallback=False)
+    input_noise = config.getboolean('GAN_HACKS', 'input_noise', fallback=False)
     
     
     """
@@ -249,7 +259,7 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     for epoch in tqdm.tqdm(range(epochs), total=epochs, desc='Epochs'):
         #print("Starting Epoch %d/%d (%s seconds)"%(epoch+1,epochs, 'N/A' if t1 is None else str(time.time()-t1).format('%.1f')))
         t1 = time.time()
-        for i, (data, target) in tqdm.tqdm(enumerate(dataset), total=len(dataset), leave=False):
+        for i, (data, target) in tqdm.tqdm(enumerate(dataset), total=L, leave=False):
             if overfit:
                 if i >= num_overfit:
                     break
@@ -264,20 +274,40 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
             fake_input_noise = torch.normal(torch.zeros(data_size, latent_dim), torch.ones(data_size, latent_dim)).to(device)
             fake_images = gen(fake_input_noise)
             fake_prediction = disc(fake_images)
-            gan_loss = loss_fn(fake_prediction, torch.rand((data_size,1)).to(device)*0.5+0.7)
+            if noisy_labels:
+                real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+            else:
+                real_targets = torch.ones((data_size,1), device=device)
+            gan_loss = loss_fn(fake_prediction, real_targets)
             gan_loss.backward()
             gen_optim.step()
             
             ## real batch
             disc_optim.zero_grad()
-            real_targets = torch.ones((data_size,1)).to(device)  # torch.rand((batch_size,1)).to(device)*0.5+0.7
-            fake_targets = torch.zeros((data_size,1)).to(device) # torch.rand((batch_size,1)).to(device)*0.3
+            if noisy_labels:
+                flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
+                real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+                fake_targets = torch.rand((data_size,1), device=device)*0.3
+                real_targets[flip_vector] -= 1.0
+                fake_targets[flip_vector] += 1.0
+            else:
+                real_targets = torch.ones((data_size,1), device=device)
+                fake_targets = torch.zeros((data_size,1), device=device) 
+            if input_noise:
+                noise = torch.randn(data.size(), device=device)*noise_factor
+                data += noise
+                fake_images += noise
             real_prediction = disc(data)
-            disc_loss = loss_fn(real_prediction, real_targets) + loss_fn(disc(fake_images.detach()), fake_targets)
-            disc_loss.backward()
+            disc_lossA = loss_fn(real_prediction, real_targets) 
+            disc_lossA.backward()
             disc_optim.step()
             
-            disc_log.append(disc_loss.detach().cpu())
+            disc_optim.zero_grad()
+            disc_lossB = loss_fn(disc(fake_images.detach()), fake_targets)
+            disc_lossB.backward()
+            disc_optim.step()
+            
+            disc_log.append(disc_lossA.detach().cpu() + disc_lossB.detach().cpu())
             gen_log.append(gan_loss.detach().cpu())
             x.append(epoch+float(i)*div)
             if i % log_every == 0:
