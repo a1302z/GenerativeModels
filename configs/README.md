@@ -1,5 +1,5 @@
 # Format of configs
-configs are in ConfigParser style
+configs are in [ConfigParser](https://docs.python.org/3/library/configparser.html) style
 
 There are three sections with different sub parameters
 ### Hyperparams
@@ -7,11 +7,12 @@ There are three sections with different sub parameters
  - lr: learning rate; defines step size of optimization steps
  - epochs: Number of epochs that model will be trained
  - loss: Name of loss function that should be applied (Options: 'L1', 'L2', 'MSE', 'BCE', 'CrossEntropy')
-#### GAN specific
+ - beta1, beta2: If adam is used as optimizer these beta values are additional hyperparams that can be set.
+##### GAN specific
  - gen_optimizer: Optimizer for generator (Options: 'SGD', 'Adam')
  - disc_optimizer: Optimizer for discriminator (Options: 'SGD', 'Adam')
  - latent_dim: Size of noise dimension used as input for generator
-#### Autoencoder specific
+##### Autoencoder specific
  - hidden_dim_size: Dimension of encoding
  - encode_factor: resolution of input will be divided by 2^encode_value but channels increased by this factor
  - base_channels: Number of channels that autoencoder model will start with
@@ -24,10 +25,10 @@ There are three sections with different sub parameters
  - input_size: size of input images in format NxM where N and M are dimensions of image
  - RGB: whether input images are RGB or one channel images
  - save_epoch_interval: Number of epochs after which an intermediate save of models is performed
- - log_every_dataset_chunk: How often visdom server is updated in 1/x epochs. E.g. for 5 server is updated every 20% of an epoch.
+ - log_every_dataset_chunk: How often visdom server is updated in 1/x epochs. E.g. for 5 server is updated every 20% of an epoch. (Visdom updates are slow!)
  
 ### GAN_HACKS
-Several GAN Hacks from [repo](https://github.com/soumith/ganhacks) are implemented and can be set here.
+Several GAN Hacks from this [repo](https://github.com/soumith/ganhacks) are implemented and can be set here.
  - noisy_labels: Whether or not to use labels that are sampled from a gaussian around the target or precise labels. Also allows label flips for discriminator training
  - flip_factor: Only if noisy_labels is allowed. Chance, that labels for discriminator are <b>correct</b>. E.g. for 0.9 10% of labels are incorrect.
  - input_noise: Add noise on input for discriminator

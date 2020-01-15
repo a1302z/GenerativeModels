@@ -25,7 +25,10 @@ config.read(args.config)
 RGB = config.getboolean('TRAINING', 'RGB')
 input_size = tuple(map(int, config.get('TRAINING', 'input_size').split('x')))
 ##Create model
-model = setup.create_model(config, args.model)
+n_classes = 1
+if args.data == 'MNIST':
+    n_classes = 10
+model = setup.create_model(config, args.model, num_classes=n_classes)
 ##Create datasetloader
 loader = setup.create_dataset_loader(config, args.data, args.overfit,ganmode='gan' in args.model.lower())
 ## Loss function

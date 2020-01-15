@@ -17,7 +17,7 @@ import models.GAN as GAN
     return config
 """
 
-def create_model(config, model_name):
+def create_model(config, model_name, num_classes=1):
     section_training = config['TRAINING']
     RGB = section_training.getboolean('RGB') if 'RGB' in section_training else None
     input_size = tuple(map(int, section_training.get('input_size').split('x'))) if 'input_size' in section_training else None
@@ -26,6 +26,7 @@ def create_model(config, model_name):
     encode_factor = section_hyper.getint('encode_factor', None)
     base_channels = section_hyper.getint('base_channels', None)
     latent_dim = section_hyper.getint('latent_dim', 10)
+    num_classes = num_classes if config.getboolean('GAN_HACKS', 'auxillary', fallback=False) else 0
     """
     if args.data == 'MNIST':
         input_size = (28,28)
@@ -52,12 +53,12 @@ def create_model(config, model_name):
     elif model_name == 'VanillaGAN':
         latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))
-        gen = GAN.VanillaGenerator(input_dim = latent_dim)
-        disc = GAN.VanillaDiscriminator()
+        gen = GAN.VanillaGenerator(input_dim = latent_dim, num_classes=num_classes)
+        disc = GAN.VanillaDiscriminator(n_classes=num_classes)
         model = (gen, disc)
     elif model_name == 'DCGAN':
-        gen = GAN.DCGenerator(input_dim = latent_dim)
-        disc = GAN.DCDiscriminator()
+        gen = GAN.DCGenerator(input_dim = latent_dim, num_classes=num_classes)
+        disc = GAN.DCDiscriminator(n_classes=num_classes)
         model = (gen, disc)
     else:
         raise NotImplementedError('The model you specified is not implemented yet')
@@ -67,7 +68,7 @@ def create_model(config, model_name):
 def create_dataset_loader(config, data, overfit=-1, ganmode=False):
     ##Create datasetloader
     loader = None
-    if overfit:
+    if overfit > 0:
         config['HYPERPARAMS']['batch_size']=str(overfit)
     if data == 'MNIST':
         tfs = [
@@ -136,6 +137,8 @@ def create_loss(config):
         loss = torch.nn.BCELoss(reduction='mean')
     elif config.get('HYPERPARAMS', 'loss') == 'CrossEntropy':
         loss = torch.nn.CrossEntropyLoss()
+    elif config.get('HYPERPARAMS', 'loss') == 'NLL':
+        loss = torch.nn.NLLLoss()
     else:
         raise NotImplementedError('Loss not supported')
     return loss

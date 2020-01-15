@@ -50,7 +50,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     overfit = num_overfit > -1
     save_interval = config.getint('TRAINING', 'save_epoch_interval', fallback=10)
     ##create save folder
-    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H:%M')
+    timestamp = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M')
     path = args.model+'_'+args.data+'_'+timestamp
     if overfit:
         path += '_overfitted'
@@ -58,7 +58,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     try:
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-        shutil.copyfile(args.config, save_dir+'/settings.config')
+        shutil.copyfile(args.config, save_dir+'/settings.ini')
     except OSError:
         print ('Error: Creating directory. ' + save_dir)
     print("Created save directory at %s"%save_dir)
@@ -163,24 +163,25 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     """
     Create optimizer
     """
+    betas = (config.getfloat('HYPERPARAMS', 'beta1', fallback=0.9),config.getfloat('HYPERPARAMS', 'beta2', fallback=0.9999))
     gen_opt_list = [{'params':gen.parameters()}]
     disc_opt_list = [{'params':disc.parameters()}]
     if config.get('HYPERPARAMS', 'disc_optimizer') == 'SGD':
         disc_optim = torch.optim.SGD(params=disc_opt_list, lr=lr)
     elif config.get('HYPERPARAMS', 'disc_optimizer') == 'Adam':
-        disc_optim = torch.optim.Adam(params=disc_opt_list, lr=lr)
+        disc_optim = torch.optim.Adam(params=disc_opt_list, lr=lr, betas=betas)
     else:
         raise NotImplementedError('Unknown optimizer!')
     if config.get('HYPERPARAMS', 'gen_optimizer') == 'SGD':
         gen_optim = torch.optim.SGD(params=gen_opt_list, lr=lr)
     elif config.get('HYPERPARAMS', 'gen_optimizer') == 'Adam':
-        gen_optim = torch.optim.Adam(params=gen_opt_list, lr=lr)
+        gen_optim = torch.optim.Adam(params=gen_opt_list, lr=lr, betas=betas)
     else:
         raise NotImplementedError('Unknown optimizer!')
     ##init model
     if resume_optim is not None:
         path, name = os.path.split(resume_optim)
-        checkpoint_gen = torch.load(os.path.join(path, 'gen_{:s}').format(name))
+        checkpoint_gen = torch.load(os.path.join(path, 'gen_{:s}'.format(name)))
         gen_optim.load_state_dict(checkpoint_gen['optimizer_state_dict'])
         gen.load_state_dict(checkpoint_gen['model_state_dict'])
         checkpoint_disc = torch.load(os.path.join(path, 'disc_{:s}'.format(name)))
@@ -203,7 +204,7 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     try:
         if not os.path.exists(save_dir):
             os.makedirs(save_dir)
-        shutil.copyfile(args.config, save_dir+'/settings.config')
+        shutil.copyfile(args.config, save_dir+'/settings.ini')
     except OSError:
         print ('Error: Creating directory. ' + save_dir)
     print("Created save directory at %s"%save_dir)
@@ -251,6 +252,12 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     noise_factor = config.getfloat('GAN_HACKS', 'noise_factor', fallback=0.1)
     noisy_labels = config.getboolean('GAN_HACKS', 'noisy_labels', fallback=False)
     input_noise = config.getboolean('GAN_HACKS', 'input_noise', fallback=False)
+    auxillary = config.getboolean('GAN_HACKS', 'auxillary', fallback=False)
+    if auxillary and args.data != 'MNIST':
+        raise RuntimeError('So far only MNIST has labels available')
+    else:
+        n_classes = 10 if args.data == 'MNIST' else None
+        
     
     
     """
@@ -264,6 +271,7 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
                 if i >= num_overfit:
                     break
             data = data.to(device)
+            target = target.to(device)
             gen_loss = None
             disc_loss = None
             gen_optim.zero_grad()
@@ -271,28 +279,49 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
             data_size = data.size(0)
             
             ## fake batch
-            fake_input_noise = torch.normal(torch.zeros(data_size, latent_dim), torch.ones(data_size, latent_dim)).to(device)
-            fake_images = gen(fake_input_noise)
-            fake_prediction = disc(fake_images)
-            if noisy_labels:
-                real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+            if auxillary:
+                fake_indices = torch.randint(0, n_classes, (data_size, 1)).to(device)
+                fake_targets = torch.zeros((data_size, n_classes+1), device=device).scatter_(1, fake_indices.view(data_size, 1), 1)
+                if noisy_labels:
+                    fake_targets += torch.randn(torch.zeros(data_size, n_classes+1), torch.ones(data_size, n_classes+1)).to(device)*0.3
+                fake_images = gen(fake_indices)
             else:
-                real_targets = torch.ones((data_size,1), device=device)
-            gan_loss = loss_fn(fake_prediction, real_targets)
+                fake_input_noise = torch.normal(torch.zeros(data_size, latent_dim), torch.ones(data_size, latent_dim)).to(device)
+                if noisy_labels:
+                    fake_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+                else:
+                    fake_targets = torch.ones((data_size,1), device=device)
+                fake_images = gen(fake_input_noise)
+            fake_prediction = disc(fake_images)
+            gan_loss = loss_fn(fake_prediction, fake_targets)
             gan_loss.backward()
             gen_optim.step()
             
             ## real batch
             disc_optim.zero_grad()
-            if noisy_labels:
-                flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
-                real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
-                fake_targets = torch.rand((data_size,1), device=device)*0.3
-                real_targets[flip_vector] -= 1.0
-                fake_targets[flip_vector] += 1.0
+            if auxillary:
+                ## change to one hot encoding
+                real_targets = torch.zeros((data_size, n_classes+1), device=device).scatter_(1, target.view(target.size(0), 1), 1)
+                fake_targets = torch.zeros((data_size, n_classes+1), device=device)
+                fake_targets[:,n_classes] = 1
+                if noisy_labels:
+                    flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
+                    real_targets += torch.randn((data_size, n_classes+1), device=device)*0.2
+                    fake_targets += torch.randn((data_size, n_classes+1), device=device)*0.2
+                    
+                    fake_targets[flip_vector,n_classes] -= 1
+                    real_targets[flip_vector,target] -= 1
             else:
-                real_targets = torch.ones((data_size,1), device=device)
-                fake_targets = torch.zeros((data_size,1), device=device) 
+                if noisy_labels:
+                    flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
+                    real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+                    fake_targets = torch.rand((data_size,1), device=device)*0.3
+                    real_targets[flip_vector] -= 1.0
+                    fake_targets[flip_vector] += 1.0
+                else:
+                    real_targets = torch.ones((data_size,1), device=device)
+                    fake_targets = torch.zeros((data_size,1), device=device)
+                    
             if input_noise:
                 noise = torch.randn(data.size(), device=device)*noise_factor
                 data += noise
