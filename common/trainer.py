@@ -248,9 +248,12 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     L = len(dataset) if not overfit else num_overfit
     t1 = None
     latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
+    gan_noise_strength = config.getfloat('HYPERPARAMS', 'GAN_noise_strength', fallback=1.0)
+    label_flips = config.getboolean('GAN_HACKS', 'label_flips', fallback=False)
     flip_prob = config.getfloat('GAN_HACKS', 'flip_prob', fallback=0.9)
     noise_factor = config.getfloat('GAN_HACKS', 'noise_factor', fallback=0.1)
     noisy_labels = config.getboolean('GAN_HACKS', 'noisy_labels', fallback=False)
+    label_noise_strength = config.getfloat('GAN_HACKS', 'label_noise_strength', fallback=0.1)
     input_noise = config.getboolean('GAN_HACKS', 'input_noise', fallback=False)
     auxillary = config.getboolean('GAN_HACKS', 'auxillary', fallback=False)
     if auxillary and args.data != 'MNIST':
@@ -279,16 +282,16 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
             data_size = data.size(0)
             
             ## fake batch
+            fake_input_noise = torch.randn((data_size, latent_dim), device=device)*gan_noise_strength
             if auxillary:
                 fake_indices = torch.randint(0, n_classes, (data_size, 1)).to(device)
                 fake_targets = torch.zeros((data_size, n_classes+1), device=device).scatter_(1, fake_indices.view(data_size, 1), 1)
                 if noisy_labels:
-                    fake_targets += torch.randn(torch.zeros(data_size, n_classes+1), torch.ones(data_size, n_classes+1)).to(device)*0.3
-                fake_images = gen(fake_indices)
+                    fake_targets += torch.randn((data_size, n_classes+1), device=device) * label_noise_strength
+                fake_images = gen(fake_indices, noise = fake_input_noise)
             else:
-                fake_input_noise = torch.normal(torch.zeros(data_size, latent_dim), torch.ones(data_size, latent_dim)).to(device)
                 if noisy_labels:
-                    fake_targets = torch.rand((data_size,1), device=device)*0.5+0.7
+                    fake_targets = torch.rand((data_size,1), device=device) * label_noise_strength+1.0-label_noise_strength/2
                 else:
                     fake_targets = torch.ones((data_size,1), device=device)
                 fake_images = gen(fake_input_noise)
@@ -305,22 +308,26 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
                 fake_targets = torch.zeros((data_size, n_classes+1), device=device)
                 fake_targets[:,n_classes] = 1
                 if noisy_labels:
-                    flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
-                    real_targets += torch.randn((data_size, n_classes+1), device=device)*0.2
-                    fake_targets += torch.randn((data_size, n_classes+1), device=device)*0.2
+                    flip_vector = torch.rand((data_size), device=device) > flip_prob
+                    real_targets += torch.randn((data_size, n_classes+1), device=device) * label_noise_strength
+                    fake_targets += torch.randn((data_size, n_classes+1), device=device) * label_noise_strength
+                if label_flips:
                     
-                    fake_targets[flip_vector,n_classes] -= 1
-                    real_targets[flip_vector,target] -= 1
+                    fake_targets[flip_vector][:,n_classes] -= 1.0
+                    fake_targets[flip_vector][:,target[flip_vector]] += 1.0
+                    real_targets[flip_vector][:,target[flip_vector]] -= 1.0
+                    real_targets[flip_vector][:,n_classes] += 1.0
             else:
                 if noisy_labels:
                     flip_vector = torch.rand((data_size, 1), device=device) > flip_prob
-                    real_targets = torch.rand((data_size,1), device=device)*0.5+0.7
-                    fake_targets = torch.rand((data_size,1), device=device)*0.3
-                    real_targets[flip_vector] -= 1.0
-                    fake_targets[flip_vector] += 1.0
+                    real_targets = torch.rand((data_size,1), device=device) * label_noise_strength+1.0-label_noise_strength/2
+                    fake_targets = torch.rand((data_size,1), device=device) * label_noise_strength
                 else:
                     real_targets = torch.ones((data_size,1), device=device)
                     fake_targets = torch.zeros((data_size,1), device=device)
+                if label_flips:
+                    real_targets[flip_vector] -= 1.0
+                    fake_targets[flip_vector] += 1.0
                     
             if input_noise:
                 noise = torch.randn(data.size(), device=device)*noise_factor

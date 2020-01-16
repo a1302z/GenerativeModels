@@ -46,8 +46,10 @@ class VanillaGenerator(nn.Module):
         init(self)
         
         
-    def forward(self, x):
+    def forward(self, x, noise=None):
         x = self.embdd(x)
+        if noise:
+            x += noise
         x = self.generate(x)
         x = x.view(-1, 1, 28, 28)
         return x
@@ -102,8 +104,11 @@ class DCGenerator(nn.Module):
         )
         init(self)
         
-    def forward(self, x):
+    def forward(self, x, noise=None):
         x = self.embdd(x)
+        if noise is not None:
+            x = x.view(noise.size())
+            x += noise
         x = self.to_img(x)
         x = x.view(x.size(0), self.channels, self.start_res, self.start_res)
         x = self.generate(x)
@@ -145,9 +150,11 @@ if __name__ == '__main__':
     parser = arg.ArgumentParser()
     parser.add_argument('--model', required=True, type=str, choices=['Vanilla', 'DC'], help='Which model to test?')
     parser.add_argument('--input_dim', type=int, default=100, help='What input dimension for generator?')
+    #parser.add_argument('--aux', action='store_true', help='Test auxillary setting')
     args = parser.parse_args()
     
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #n_classes = 10 if args.aux else 0
     
     if args.model == 'Vanilla':
         print('Vanilla Generator test')

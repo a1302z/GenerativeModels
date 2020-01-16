@@ -12,6 +12,7 @@ There are three sections with different sub parameters
  - gen_optimizer: Optimizer for generator (Options: 'SGD', 'Adam')
  - disc_optimizer: Optimizer for discriminator (Options: 'SGD', 'Adam')
  - latent_dim: Size of noise dimension used as input for generator
+ - GAN_noise_strength: Factor to multiply noise input for generator sampled from normal distribution with.
 ##### Autoencoder specific
  - hidden_dim_size: Dimension of encoding
  - encode_factor: resolution of input will be divided by 2^encode_value but channels increased by this factor
@@ -29,7 +30,9 @@ There are three sections with different sub parameters
  
 ### GAN_HACKS
 Several GAN Hacks from this [repo](https://github.com/soumith/ganhacks) are implemented and can be set here.
- - noisy_labels: Whether or not to use labels that are sampled from a gaussian around the target or precise labels. Also allows label flips for discriminator training
- - flip_factor: Only if noisy_labels is allowed. Chance, that labels for discriminator are <b>correct</b>. E.g. for 0.9 10% of labels are incorrect.
+ - noisy_labels: Whether or not to add gaussian noise to labels.
+ - label_noise_strength: factor for normal distribution added to target labels
+ - label_flips: allow label flips for discriminator training
+ - flip_factor: Chance, that labels for discriminator are <b>correct</b>. E.g. for 0.9 10% of labels are incorrect.
  - input_noise: Add noise on input for discriminator
  - noise_factor: Only if input_noise is allowed. Factor that noise sampled from uniform gaussian is scaled with. Remember that input should be in [-1, 1].
