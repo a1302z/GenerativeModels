@@ -22,10 +22,12 @@ def create_model(config, model_name, num_classes=1):
     RGB = section_training.getboolean('RGB') if 'RGB' in section_training else None
     input_size = tuple(map(int, section_training.get('input_size').split('x'))) if 'input_size' in section_training else None
     section_hyper = config['HYPERPARAMS']
-    hidden_dim_size = tuple(map(int, section_hyper.get('hidden_dim_size').split(','))) if 'hidden_dim_size' in section_hyper else None
     encode_factor = section_hyper.getint('encode_factor', None)
     base_channels = section_hyper.getint('base_channels', None)
     latent_dim = section_hyper.getint('latent_dim', 10)
+    channel_increase_factor = section_hyper.getint('channel_increase_factor', 2)
+    conv_blocks_per_decrease = section_hyper.getint('conv_blocks_per_decrease', 1)
+    initial_upsample_size = section_hyper.getint('initial_upsample_size', 3)
     num_classes = num_classes if config.getboolean('GAN_HACKS', 'auxillary', fallback=False) else 0
     """
     if args.data == 'MNIST':
@@ -44,12 +46,8 @@ def create_model(config, model_name, num_classes=1):
 
     ## Init model
     model = None
-    if model_name == 'AE':
-        model = AE.Autoencoder(input_size, encode_factor, RGB = RGB, base_channels=base_channels)
-    elif model_name == 'AE_linear':
-        model = AE.LinearAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
-    elif model_name == 'VAE':
-        model = AE.VariationalAutoencoder(input_size, encode_factor, RGB = RGB, hidden_size=hidden_dim_size, base_channels=base_channels)
+    if model_name in ['AE', 'VAE']:
+        model = AE.Autoencoder(variational = model_name == 'VAE', final_size=input_size, encode_factor=encode_factor, RGB = RGB, base_channels=base_channels, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, initial_upsample_size=initial_upsample_size)
     elif model_name == 'VanillaGAN':
         latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))

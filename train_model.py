@@ -7,7 +7,7 @@ import os, sys
 
 
 parser = arg.ArgumentParser(description='Train generative model.')
-parser.add_argument('--model', type=str, choices=('AE', 'AE_linear', 'VAE', 'VanillaGAN', 'DCGAN'), help='Which model to train', required=True)
+parser.add_argument('--model', type=str, choices=('AE', 'VAE', 'VanillaGAN', 'DCGAN'), help='Which model to train', required=True)
 parser.add_argument('--data', type=str, choices=('MNIST', 'CelebA'), help='Dataset name to be used for training', required=True)
 parser.add_argument('--config', type=str, help='path to config file', required=True)
 parser.add_argument('--overfit', type=int, default=-1, help='Overfit to number of samples')
@@ -34,7 +34,7 @@ loader = setup.create_dataset_loader(config, args.data, args.overfit,ganmode='ga
 ## Loss function
 loss = setup.create_loss(config)
 
-if args.model in ['AE', 'AE_linear', 'VAE']:
+if args.model in ['AE', 'VAE']:
     optim = trainer.train_AE(args, loader, model, loss, config, num_overfit=args.overfit, resume_optim=args.resume_optimization, 
                       input_size=(3 if RGB else 1, input_size[0], input_size[1]))
 elif args.model in ['VanillaGAN', 'DCGAN']:

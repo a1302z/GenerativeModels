@@ -25,7 +25,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     Create optimizer
     """
     opt_list = list(model.parameters())
-    if type(model) == AE.VariationalAutoencoder:
+    if args.model == 'VAE':
         #kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
         weighted_loss = AE.WeightedMultiLoss(init_values=[config.getfloat('HYPERPARAMS', 'IMG_loss_weight'), config.getfloat('HYPERPARAMS', 'VAE_loss_weight')], learn_weights=config.getboolean('HYPERPARAMS', 'learn_loss_weights'))
         opt_list.extend(list(weighted_loss.parameters()))
@@ -66,7 +66,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     if torch.cuda.is_available():
         print("CUDA available")
-        if type(model) == AE.VariationalAutoencoder:
+        if args.model == 'VAE':
             #kl_loss_weight = kl_loss_weight.cuda()
             weighted_loss.to(device)
         if resume_optim is not None:
@@ -89,7 +89,7 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         vis_plot = vis.line(Y=[0],env=vis_env,opts=plt_dict)
         vis_image = vis.image(np.zeros(input_size),env=vis_env)
         vis_data = vis.image(np.zeros(input_size),env=vis_env)
-        if type(model) == AE.VariationalAutoencoder:
+        if args.model == 'VAE':
             vae_dict = dict(ytickmax=10, legend=['reconstruction loss', 'kl loss'], xlabel='epoch', ylabel='loss')
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
             vae_w_dict = dict(ymin=0, ymax=10, legend=['Weight Image', 'Weight KL-div'], xlabel='epoch', ylabel='value')
@@ -111,21 +111,21 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     """
     Actual training loop
     """
-    for epoch in range(epochs): # tqdm.tqdm(range(epochs), total=epochs, desc='Epochs'):
+    for epoch in tqdm.tqdm(range(epochs), total=epochs, desc='Epochs'):
         #print("Starting Epoch %d/%d (%s seconds)"%(epoch+1,epochs, 'N/A' if t1 is None else '{:.2f}'.format(time.time()-t1)))
         t1 = time.time()
-        for i, (data, target) in enumerate(dataset):#tqdm.tqdm(enumerate(dataset), total=num_overfit if overfit else len(dataset), leave=False):
+        for i, (data, target) in tqdm.tqdm(enumerate(dataset), total=num_overfit if overfit else len(dataset), leave=False):
             if overfit:
                 if i >= num_overfit:
                     break
             data = data.to(device)
             loss = None
             optim.zero_grad()
-            if type(model) == AE.VariationalAutoencoder:
+            if args.model == 'VAE':
                 prediction, mean, log_var = model(data)
                 loss_img = loss_fn(prediction, data)
                 ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
-                kl_div = 0.5*torch.sum(mean**2 +torch.exp(log_var) - log_var - 1.0)
+                kl_div = 0.5*torch.mean(mean**2 +torch.exp(log_var) - log_var - 1.0)
                 #loss = loss_img + kl_loss_weight*kl_div#/(2*torch.exp(2*kl_loss_weight))+kl_loss_weight
                 l = weighted_loss([loss_img, kl_div])
                 loss = sum(l)
@@ -136,8 +136,8 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
                 loss = loss_fn(prediction, data)
             loss.backward()
             optim.step()
-            print('Prediction\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(prediction.min(), prediction.max(), prediction.mean()))
-            print('data\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(data.min(), data.max(), data.mean()))
+            #print('Prediction\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(prediction.min(), prediction.max(), prediction.mean()))
+            #print('data\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(data.min(), data.max(), data.mean()))
             loss_log.append(loss.detach().cpu())
             x.append(epoch+float(i)*div)
             if i % log_every == 0:
@@ -146,11 +146,11 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
                     vis_plot = vis.line(win=vis_plot,X=x,Y=loss_log, env=vis_env, opts=plt_dict)
                     img = prediction.cpu()
                     img = img if img.shape[0] ==1 else img[0]
-                    data_img = data.cpu()
+                    data_img = torch.clamp(data.cpu(), 0, 1)
                     data_img = data_img if data_img.shape[0] ==1 else data_img[0]
                     vis_image = vis.image(img,win=vis_image, env=vis_env)
                     vis_data = vis.image(data_img,win=vis_data, env=vis_env)
-                    if type(model) == AE.VariationalAutoencoder:
+                    if args.model == 'VAE':
                         vis_vae = vis.line(win=vis_vae, X=x,Y=loss_vae, env=vis_env, opts=vae_dict)
                         vis_weights = vis.line(win=vis_weights, X=x, Y=weight, env=vis_env, opts=vae_w_dict)
                     vis.save(envs=[vis_env])

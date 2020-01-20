@@ -8,15 +8,17 @@ There are three sections with different sub parameters
  - epochs: Number of epochs that model will be trained
  - loss: Name of loss function that should be applied (Options: 'L1', 'L2', 'MSE', 'BCE', 'CrossEntropy')
  - beta1, beta2: If adam is used as optimizer these beta values are additional hyperparams that can be set.
+ - latent_dim: Encoding dimension for Autoencoders. Size of noise dimension used as input for generator for GANs.
 ##### GAN specific
  - gen_optimizer: Optimizer for generator (Options: 'SGD', 'Adam')
  - disc_optimizer: Optimizer for discriminator (Options: 'SGD', 'Adam')
- - latent_dim: Size of noise dimension used as input for generator
  - GAN_noise_strength: Factor to multiply noise input for generator sampled from normal distribution with.
 ##### Autoencoder specific
- - hidden_dim_size: Dimension of encoding
  - encode_factor: resolution of input will be divided by 2^encode_value but channels increased by this factor
  - base_channels: Number of channels that autoencoder model will start with
+ - channel_increase_factor: factor of increase for channels at very encoding block (encode_factor)
+ - conv_blocks_per_decrease: how many convolutions per encoding block
+ - initial_upsample_size: Important for decoder. First upsampling after encoding. Look at summary to choose optimally the value that it was before adaptive avg pooling in encoder!
  - IMG_loss_weight: Weight for loss of image reconstruction for variational autoencoder
  - VAE_loss_weight: Weight for KL-Divergence for variational autoencoder
  - learn_loss_weights: Train weights for variational autoencoder loss
