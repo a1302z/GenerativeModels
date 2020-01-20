@@ -73,16 +73,18 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
     if data == 'MNIST':
         tfs = [
             torchvision.transforms.ToTensor(),
-            torchvision.transforms.Normalize((0.1307,), (0.3081,))
         ]
         if ganmode:
             print('Data normalized between -1 and 1')
-            tfs.append(torchvision.transforms.Lambda(lambda x: x*0.616200 -0.738600))
+            tfs.append(torchvision.transforms.Normalize((0.5, ), (0.5, )))
+            #tfs.append(torchvision.transforms.Lambda(lambda x: x*0.616200 -0.738600))
+        else:
+            tfs.append(torchvision.transforms.Normalize((0.1307,), (0.3081,)))
         loader = torch.utils.data.DataLoader(
             torchvision.datasets.MNIST('data', train=True, download=True,
                            transform=torchvision.transforms.Compose(tfs)),
-            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=overfit>-1,
-            num_workers = 4
+            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=overfit<0,
+            #num_workers = 4
         )
     elif data == 'CelebA':
         data_path = 'data/CelebA/'
@@ -134,7 +136,7 @@ def create_loss(config):
     elif config.get('HYPERPARAMS', 'loss') in ['MSE', 'L2']:
         loss = torch.nn.functional.mse_loss
     elif config.get('HYPERPARAMS', 'loss') == 'BCE':
-        loss = torch.nn.BCELoss(reduction='mean')
+        loss = torch.nn.BCELoss()
     elif config.get('HYPERPARAMS', 'loss') == 'CrossEntropy':
         loss = torch.nn.CrossEntropyLoss()
     elif config.get('HYPERPARAMS', 'loss') == 'NLL':

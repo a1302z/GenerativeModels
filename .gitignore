@@ -15,3 +15,4 @@ models/__pycache__/Autoencoder.cpython-37.pyc
 !**/*profil*.sh
 git-readme-preview.ipynb
 test.py
+test_AE.py

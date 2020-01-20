@@ -1,0 +1,20 @@
+import torch
+import torchvision
+import models.Autoencoder as AE
+from torchsummary import summary
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = AE.Autoencoder((28,28), 2, RGB = False, base_channels=64).to(device)
+summary(model, (1,28,28))
+tfs = [loader = torch.utils.data.DataLoader(
+            torchvision.datasets.MNIST('data', train=True, download=True,
+                           transform=torchvision.transforms.Compose(tfs)),
+            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=overfit<0,
+            #num_workers = 4
+        )
+loader = torch.utils.data.DataLoader(
+            torchvision.datasets.MNIST('data', train=True, download=True,
+                           transform=torchvision.transforms.Compose(tfs)),
+            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=False,
+            #num_workers = 4
+        )
