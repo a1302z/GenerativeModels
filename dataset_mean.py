@@ -4,23 +4,62 @@ import numpy as np
 import tqdm
 import matplotlib.pyplot as plt
 
-tfs = torchvision.transforms.Compose([
-    torchvision.transforms.ToTensor(),
-    #torchvision.transforms.Normalize((0.5,), (0.5,))
-    torchvision.transforms.Normalize((0.130661,), (0.308108,)),
-    torchvision.transforms.Lambda(lambda x: torch.clamp(x, 0, 1))
-])
 
-dset = torchvision.datasets.MNIST('data', train=True, download=True,
-                           transform=tfs)
+import argparse as arg
+parser = arg.ArgumentParser()
+parser.add_argument('--data', default='MNIST', choices=['MNIST', 'CelebA'], help='Which dataset')
+parser.add_argument('--batch_size', default=128, type=int, help='Size of batches')
+args = parser.parse_args()
 
+if args.data == 'MNIST':
+    tfs = torchvision.transforms.Compose([
+        torchvision.transforms.ToTensor(),
+        #torchvision.transforms.Normalize((0.5,), (0.5,))
+        #torchvision.transforms.Normalize((0.130661,), (0.308108,)),
+        #torchvision.transforms.Lambda(lambda x: torch.clamp(x, 0, 1))
+    ])
+
+    dset = torchvision.datasets.MNIST('data', train=True, download=True,
+                               transform=tfs)
+    channels = 1
+elif args.data == 'CelebA':
+    dset = torchvision.datasets.ImageFolder(
+            root='data/CelebA/',
+            transform=torchvision.transforms.ToTensor()
+        )
+    channels = 3
+else:
+    raise NotImplementedError('Dataset not implemented')
 
 loader = torch.utils.data.DataLoader(
             dset,
-            batch_size=1, shuffle=False)
-acc = np.zeros((1, 28, 28))
-sq_acc = np.zeros((1, 28, 28))
-min_px, max_px = 1e10, -1e10
+            batch_size=args.batch_size, shuffle=False)
+
+"""
+Credits to https://forums.fast.ai/t/normalizing-your-dataset/49799
+"""
+
+cnt = 0
+fst_moment = torch.empty(channels)
+snd_moment = torch.empty(channels)
+mn, mx = 1e10, -1e10
+for images, _ in tqdm.tqdm(loader, total=len(loader)):
+    b, c, h, w = images.size()
+    nb_pixels = b * h * w
+    sum_ = torch.sum(images, dim=[0, 2, 3])
+    sum_of_square = torch.sum(images ** 2, dim=[0, 2, 3] )
+    fst_moment = (cnt * fst_moment + sum_) / (cnt + nb_pixels)
+    snd_moment = (cnt * snd_moment + sum_of_square) / (cnt + nb_pixels)
+    cnt += nb_pixels
+    mn = min(mn, images.min().item())
+    mx = max(mx, images.max().item())
+std = torch.sqrt(snd_moment - fst_moment ** 2).numpy()
+fst_moment = fst_moment.numpy()
+print('Mean: {:s}\tStd: {:s}'.format(str(fst_moment), str(st)))
+print('Data range in [{:.3f}, {:.3f}]'.format(mn, mx))
+
+
+""" First version with accumulating data - only works for small dataset such as MNIST
 imgs = []
 for data, _ in tqdm.tqdm(loader, total=len(loader)):
     imgs.append(data.numpy())
@@ -28,28 +67,10 @@ imgs = np.vstack(imgs)
 print('stacked')
 mean = np.mean(imgs)
 std = np.std(imgs)
-print('Data in range [{:.2f}, {:.2f}]'.format(np.min(imgs), np.max(imgs)))
 print('Mean: {:.8f}\nstd: {:.8f}'.format(mean, std))
+print('Data in range [{:.2f}, {:.2f}]'.format(np.min(imgs, axis=0), np.max(imgs, axis=0)))
+
 imgs = imgs.flatten()
 plt.hist(imgs, bins=100)
 plt.show()
-"""
-    acc += np.sum(imgs, axis=0)
-    sq_acc += np.sum(imgs**2, axis=0)
-    min_px = min(min_px, imgs.min())
-    max_px = max(max_px, imgs.max())
-    
-print('Dataset range from {:.2f} to {:.2f}'.format(min_px, max_px))
-    
-N = len(dset) * acc.shape[1] * acc.shape[2]
-
-mean_p = np.asarray([np.sum(acc[c]) for c in range(1)])
-mean_p /= N
-print('Mean pixel = {:.6f}'.format(float(mean_p)))
-
-# std = E[x^2] - E[x]^2
-std_p = np.asarray([np.sum(sq_acc[c]) for c in range(1)])
-std_p /= N
-std_p -= (mean_p ** 2)
-print('Std. pixel = {:.6f}'.format(float(std_p)))
 """

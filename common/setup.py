@@ -28,6 +28,7 @@ def create_model(config, model_name, num_classes=1):
     channel_increase_factor = section_hyper.getint('channel_increase_factor', 2)
     conv_blocks_per_decrease = section_hyper.getint('conv_blocks_per_decrease', 1)
     initial_upsample_size = section_hyper.getint('initial_upsample_size', 3)
+    skip_connections = section_hyper.getboolean('skip_connections', False)
     num_classes = num_classes if config.getboolean('GAN_HACKS', 'auxillary', fallback=False) else 0
     """
     if args.data == 'MNIST':
@@ -47,7 +48,7 @@ def create_model(config, model_name, num_classes=1):
     ## Init model
     model = None
     if model_name in ['AE', 'VAE']:
-        model = AE.Autoencoder(variational = model_name == 'VAE', final_size=input_size, encode_factor=encode_factor, RGB = RGB, base_channels=base_channels, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, initial_upsample_size=initial_upsample_size)
+        model = AE.Autoencoder(variational = model_name == 'VAE', final_size=input_size, encode_factor=encode_factor, RGB = RGB, base_channels=base_channels, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, initial_upsample_size=initial_upsample_size, skip_connections=skip_connections)
     elif model_name == 'VanillaGAN':
         latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))
@@ -86,14 +87,19 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
         )
     elif data == 'CelebA':
         data_path = 'data/CelebA/'
+        tfs = [torchvision.transforms.ToTensor()]
+        if ganmode:
+            tfs.append(torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
+        else:
+            tfs.append(torchvision.transforms.Normalize((0.5060818,  0.42541984, 0.38281444), (0.31069, 0.29028416, 0.28965387)))
         celeba = torchvision.datasets.ImageFolder(
             root=data_path,
             transform=torchvision.transforms.ToTensor()
         )
         loader = torch.utils.data.DataLoader(
             celeba,
-            batch_size=int(config['batch_size']),
-            shuffle=not overfit, 
+            batch_size=config.getint('HYPERPARAMS','batch_size'),
+            shuffle=overfit<0, 
             num_workers=4
         )
     else: 
