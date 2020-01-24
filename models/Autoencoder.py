@@ -105,7 +105,7 @@ class Decoder(nn.Module):
     
     
 class Autoencoder(nn.Module):
-    def __init__(self, variational=False, final_size=(28,28), base_channels=16, encode_factor=2, channel_increase_factor=2, conv_blocks_per_decrease=1, encoding_dimension=128, RGB=False, initial_upsample_size=3, skip_connections=False):
+    def __init__(self, variational=False, final_size=(28,28), base_channels=16, encode_factor=2, channel_increase_factor=2, conv_blocks_per_decrease=1, encoding_dimension=128, RGB=False, initial_upsample_size=3, skip_connections=False, n_classes=0):
         super(Autoencoder, self).__init__()
         self.variational = variational
         self.encoding_dimension = encoding_dimension
@@ -117,24 +117,59 @@ class Autoencoder(nn.Module):
             self.log_var = nn.Linear(self.final_channels, encoding_dimension)
             self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.from_hidden = nn.Linear(encoding_dimension, self.final_channels)
+        self.auxillary = n_classes > 0
+        self.n_classes = n_classes
+        if self.n_classes > 0:
+            self.classify = nn.Sequential(nn.Linear(encoding_dimension, self.n_classes), nn.Sigmoid())
         
     def forward(self, x):
         x = self.encoder(x)
         s = x.size()
         x = x.view(x.size(0), -1)
+        c = 0
         if self.variational:
             m = self.to_hidden(x)
+            if self.auxillary:
+                c = self.classify(m)
             log_var = self.log_var(x)
             x = self.sample_z(m, log_var)
         else:
             x = self.to_hidden(x)
+            if self.auxillary:
+                c = self.classify(x)
         x = self.from_hidden(x)
         x = x.view(s)
         x = self.decoder(x)
         if self.variational:
-            return x, m, log_var
+            return x, m, log_var, c
         else:
-            return x
+            return x, c
+    
+    def encode(self, x):
+        x = self.encoder(x)
+        s = x.size()
+        x = x.view(x.size(0), -1)
+        c = 0
+        if self.variational:
+            m = self.to_hidden(x)
+            if self.auxillary:
+                c = self.classify(m)
+            log_var = self.log_var(x)
+            return m, log_var, c
+        else:
+            x = self.to_hidden(x)
+            if self.auxillary:
+                c = self.classify(x)
+            return x, c
+        
+    def decode(self, x, c=0):
+        x = self.from_hidden(x)
+        x = x.view(x.size(0), -1, 1, 1)
+        x = self.decoder(x)
+        return x
+        
+        
+        
     
     def sample_z(self, mu, log_var):
         # Using reparameterization trick to sample from a gaussian
@@ -186,13 +221,14 @@ if __name__ == '__main__':
         model = nn.Sequential(encoder, decoder)
         """
         base_channels = 4
-        conv_blocks_per_decrease = 6
+        conv_blocks_per_decrease = 10
         channel_increase_factor = 4
         encode_factor = 3
-        encoding_dimension = 128
+        latent_dim = 2
         initial_upsample_size = 4
         skip_connections = True
-        model = Autoencoder(variational=args.model=='VAE', final_size=data_shape[1:3], base_channels=base_channels, encode_factor=encode_factor, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=encoding_dimension, RGB=args.data!='MNIST', initial_upsample_size=initial_upsample_size, skip_connections=skip_connections)
+        auxillary = False
+        model = Autoencoder(variational=args.model=='VAE', final_size=data_shape[1:3], base_channels=base_channels, encode_factor=encode_factor, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, RGB=args.data!='MNIST', initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, n_classes=0 if not auxillary else 10)
         
     model.to(device)
     summary(model, data_shape, batch_size=args.batch_size)

@@ -22,6 +22,7 @@ There are three sections with different sub parameters
  - IMG_loss_weight: Weight for loss of image reconstruction for variational autoencoder
  - VAE_loss_weight: Weight for KL-Divergence for variational autoencoder
  - learn_loss_weights: Train weights for variational autoencoder loss
+ - skip_connections: boolean whether to use Resnet like skip connection in encoder and decoder. Directly relates to conv_blocks_per_decrease
  
 ### Training
  - visdom: Whether to use a visdom server (Highly recommended: start with python -m visdom.server)

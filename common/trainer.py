@@ -29,6 +29,17 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         #kl_loss_weight = torch.tensor(float(config['VAE_loss_weight']))
         weighted_loss = AE.WeightedMultiLoss(init_values=[config.getfloat('HYPERPARAMS', 'IMG_loss_weight'), config.getfloat('HYPERPARAMS', 'VAE_loss_weight')], learn_weights=config.getboolean('HYPERPARAMS', 'learn_loss_weights'))
         opt_list.extend(list(weighted_loss.parameters()))
+    
+    auxillary = config.getboolean('HYPERPARAMS', 'auxillary', fallback=False)
+    if auxillary and args.data != 'MNIST':
+        raise RuntimeError('So far only MNIST has labels available')
+    elif auxillary:
+        n_classes = 10 if args.data == 'MNIST' else None
+        aux_loss_fn = torch.nn.BCELoss()
+        aux_loss_weight = AE.WeightedMultiLoss(init_values=[0,0], learn_weights=False)
+        opt_list.extend(list(aux_loss_weight.parameters()))
+        loss_aux = []
+    
     if config.get('HYPERPARAMS', 'optimizer') == 'SGD':
         optim = torch.optim.SGD(params=opt_list, lr=lr)
     elif config.get('HYPERPARAMS', 'optimizer') == 'Adam':
@@ -69,6 +80,8 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
         if args.model == 'VAE':
             #kl_loss_weight = kl_loss_weight.cuda()
             weighted_loss.to(device)
+        if auxillary:
+            aux_loss_weight.to(device)
         if resume_optim is not None:
             for state in optim.state.values():
                     for k, v in state.items():
@@ -94,6 +107,12 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
             vis_vae = vis.line(Y=[0,0], env=vis_env, opts=vae_dict)
             vae_w_dict = dict(ymin=0, ymax=10, legend=['Weight Image', 'Weight KL-div'], xlabel='epoch', ylabel='value')
             vis_weights = vis.line(Y=[0,0], env=vis_env, opts=vae_w_dict)
+        if auxillary:
+            aux_dict = dict(legend=['loss', 'aux loss'], xlabel='epoch', ylabel='loss')
+            vis_aux = vis.line(Y=[0,0], env=vis_env, opts=aux_dict)
+            #vae_w_dict = dict(ymin=0, ymax=10, legend=['Weight Loss', 'Weight KL-div'], xlabel='epoch', ylabel='value')
+            #vis_weights = vis.line(Y=[0,0], env=vis_env, opts=vae_w_dict)
+            
             
     log_every = max(1, int(len(dataset)/config.getint('TRAINING', 'log_every_dataset_chunk', fallback=5))) if not overfit else num_overfit
     if 'epochs' not in config['HYPERPARAMS']:
@@ -105,7 +124,6 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
     x = []
     div = 1./float(len(dataset) if not overfit else num_overfit)
     t1 = None
-    
     
     
     """
@@ -122,20 +140,29 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
             loss = None
             optim.zero_grad()
             if args.model == 'VAE':
-                prediction, mean, log_var = model(data)
+                prediction, mean, log_var, c = model(data)
                 loss_img = loss_fn(prediction, data)
                 ## KL = sum_i sigma_i^2 + mu_i^2 - log(sigma_i) -1
                 kl_div = 0.5*torch.mean(mean**2 +torch.exp(log_var) - log_var - 1.0)
                 #loss = loss_img + kl_loss_weight*kl_div#/(2*torch.exp(2*kl_loss_weight))+kl_loss_weight
                 l = weighted_loss([loss_img, kl_div])
                 loss = sum(l)
-                loss_vae.append([loss_img.detach().cpu(), kl_div.detach().cpu()])
-                weight.append([weighted_loss.weight0.detach().cpu(), weighted_loss.weight1.detach().cpu()])
             else:
-                prediction = model(data)
+                prediction, c = model(data)
                 loss = loss_fn(prediction, data)
+            if auxillary:
+                target = torch.zeros((data.size(0), n_classes), device=device).scatter_(1, target.view(target.size(0), 1).to(device), 1)
+                aux_loss = aux_loss_fn(c, target)
+                l = aux_loss_weight([aux_loss, loss])
+                loss += sum(l)
             loss.backward()
             optim.step()
+            if auxillary:
+                loss_aux.append([loss.detach().cpu(), aux_loss.detach().cpu()])
+            if args.model == 'VAE':
+                loss_vae.append([loss_img.detach().cpu(), kl_div.detach().cpu()])
+                weight.append([weighted_loss.weight0.detach().cpu(), weighted_loss.weight1.detach().cpu()])
+            
             #print('Prediction\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(prediction.min(), prediction.max(), prediction.mean()))
             #print('data\tmin:{:.2f}\tmax:{:.2f}\tmean:{:.2f}'.format(data.min(), data.max(), data.mean()))
             loss_log.append(loss.detach().cpu())
@@ -153,6 +180,8 @@ def train_AE(args, dataset, model, loss_fn, config, num_overfit=-1, resume_optim
                     if args.model == 'VAE':
                         vis_vae = vis.line(win=vis_vae, X=x,Y=loss_vae, env=vis_env, opts=vae_dict)
                         vis_weights = vis.line(win=vis_weights, X=x, Y=weight, env=vis_env, opts=vae_w_dict)
+                    if auxillary:
+                        vis_aux = vis.line(win=vis_aux, X=x, Y=loss_aux, env=vis_env, opts=aux_dict)
                     vis.save(envs=[vis_env])
         if ((epoch + 1) % save_interval) == 0:
             save_model(model, optim, save_dir, 'epoch_'+str(epoch+1))
@@ -260,7 +289,7 @@ def train_GAN(args, dataset, gen, disc, loss_fn, config, num_overfit=-1, resume_
     noisy_labels = config.getboolean('GAN_HACKS', 'noisy_labels', fallback=False)
     label_noise_strength = config.getfloat('GAN_HACKS', 'label_noise_strength', fallback=0.1)
     input_noise = config.getboolean('GAN_HACKS', 'input_noise', fallback=False)
-    auxillary = config.getboolean('GAN_HACKS', 'auxillary', fallback=False)
+    auxillary = config.getboolean('HYPERPARAMS', 'auxillary', fallback=False)
     if auxillary and args.data != 'MNIST':
         raise RuntimeError('So far only MNIST has labels available')
     else:

@@ -29,7 +29,7 @@ def create_model(config, model_name, num_classes=1):
     conv_blocks_per_decrease = section_hyper.getint('conv_blocks_per_decrease', 1)
     initial_upsample_size = section_hyper.getint('initial_upsample_size', 3)
     skip_connections = section_hyper.getboolean('skip_connections', False)
-    num_classes = num_classes if config.getboolean('GAN_HACKS', 'auxillary', fallback=False) else 0
+    num_classes = num_classes if config.getboolean('HYPERPARAMS', 'auxillary', fallback=False) else 0
     """
     if args.data == 'MNIST':
         input_size = (28,28)
@@ -48,7 +48,7 @@ def create_model(config, model_name, num_classes=1):
     ## Init model
     model = None
     if model_name in ['AE', 'VAE']:
-        model = AE.Autoencoder(variational = model_name == 'VAE', final_size=input_size, encode_factor=encode_factor, RGB = RGB, base_channels=base_channels, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, initial_upsample_size=initial_upsample_size, skip_connections=skip_connections)
+        model = AE.Autoencoder(variational = model_name == 'VAE', final_size=input_size, encode_factor=encode_factor, RGB = RGB, base_channels=base_channels, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, encoding_dimension=latent_dim, initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, n_classes=num_classes)
     elif model_name == 'VanillaGAN':
         latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))
@@ -64,11 +64,14 @@ def create_model(config, model_name, num_classes=1):
     return model
 
 
-def create_dataset_loader(config, data, overfit=-1, ganmode=False):
+def create_dataset_loader(config, data, overfit=-1, ganmode=False, test=False, directory='data'):
     ##Create datasetloader
     loader = None
     if overfit > 0:
         config['HYPERPARAMS']['batch_size']=str(overfit)
+    if test:
+        
+        config['HYPERPARAMS']['batch_size']= str(1)
     if data == 'MNIST':
         tfs = [
             torchvision.transforms.ToTensor(),
@@ -80,13 +83,13 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
         else:
             tfs.append(torchvision.transforms.Normalize((0.1307,), (0.3081,)))
         loader = torch.utils.data.DataLoader(
-            torchvision.datasets.MNIST('data', train=True, download=True,
+            torchvision.datasets.MNIST(directory, train=not test, download=True,
                            transform=torchvision.transforms.Compose(tfs)),
-            batch_size=config.getint('HYPERPARAMS','batch_size'), shuffle=overfit<0,
-            #num_workers = 4
+            batch_size=config.getint('HYPERPARAMS','batch_size') if not test else 1, shuffle=overfit<0 and not test,
+            num_workers = 4  if not test else 0
         )
     elif data == 'CelebA':
-        data_path = 'data/CelebA/'
+        data_path = os.path.join(directory, 'CelebA/')
         tfs = [torchvision.transforms.ToTensor()]
         if ganmode:
             tfs.append(torchvision.transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)))
@@ -98,16 +101,16 @@ def create_dataset_loader(config, data, overfit=-1, ganmode=False):
         )
         loader = torch.utils.data.DataLoader(
             celeba,
-            batch_size=config.getint('HYPERPARAMS','batch_size'),
-            shuffle=overfit<0, 
-            num_workers=4
+            batch_size=config.getint('HYPERPARAMS','batch_size') if not test else 1,
+            shuffle=overfit<0 and not test, 
+            num_workers=4 if not test else 0
         )
     else: 
         raise NotImplementedError('The dataset you specified is not implemented')
     print('Given %d training points (batch size: %d)'%(len(loader), config.getint('HYPERPARAMS', 'batch_size')))
     return loader
 
-def create_test_loader(data='MNIST', directory='data'):
+"""def create_test_loader(data='MNIST', directory='data'):
     if data == 'MNIST':
         loader = torch.utils.data.DataLoader(
             torchvision.datasets.MNIST(directory, train=False, download=True,
@@ -131,7 +134,7 @@ def create_test_loader(data='MNIST', directory='data'):
         raise NotImplementedError('Test dataset for specified dataset not implemented yet')
     
     return loader
-
+"""
 
 def create_loss(config):
     loss = None

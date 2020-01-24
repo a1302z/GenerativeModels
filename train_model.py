@@ -1,5 +1,6 @@
 import argparse as arg
 import torch
+import numpy as np
 from configparser import ConfigParser
 import common.trainer as trainer
 import common.setup as setup
@@ -17,6 +18,16 @@ args = parser.parse_args()
 
 if args.device is not None:
     os.environ['CUDA_VISIBLE_DEVICES'] = args.device
+    
+"""
+Make training deterministic
+"""
+seed = 1
+#random.seed(seed)
+torch.manual_seed(seed)
+np.random.seed(seed)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 #print(args)
 ## Parse config
