@@ -10,14 +10,15 @@ As these are all Machine Learning models they learn from given data. We are usin
  <summary><b>Architecture details</b></summary><br/>
   
 Autoencoder architecture is fully described by a set of parameters:
-    - base_channels: Number of channels after first convolution
-    - conv_blocks_per_decrease: Convolutions in each downsizing module
-    - channel_increase_factor: Factor by which channels increase after each downsizing module
-    - encode_factor: Number of downsizing modules
-    - latent_dim: Dimension of encoding vector
-    - initial_upsample_size: Start resolution in decoder
-    - skip_connections: Use ResNet like skip connections in downsizing modules
-    - auxillary: Allow encoder to also learn class labels (makes training easier)
+ - base_channels: Number of channels after first convolution
+ - conv_blocks_per_decrease: Convolutions in each downsizing module
+ - channel_increase_factor: Factor by which channels increase after each downsizing module
+ - encode_factor: Number of downsizing modules
+ - latent_dim: Dimension of encoding vector
+ - initial_upsample_size: Start resolution in decoder
+ - skip_connections: Use ResNet like skip connections in downsizing modules
+ - auxillary: Allow encoder to also learn class labels (makes training easier)
+
 For a more exact description see [configs folder](configs/README.md)
     
 A model summary can be retrieved by running `python -m models.Autoencoder -h`. Note: parameters in summary are currently hardcoded.
@@ -68,12 +69,12 @@ Variational autoencoders similarily to Autoencoders trying to find a good hidden
 |MNIST|CelebA|
 --->
 
-<!---
+
 <b> Randomly generated artificial samples </b> <br/>
 
-| ![Artificial MNIST](result_figures/artificial_samples_MNIST.png) | ![Artificial CelebA](result_figures/artificial_samples_CelebA.png) |
-|:--:|:--:|
---->
+| ![Artificial MNIST](result_figures/artificial_samples_MNIST.png) |
+|:--:|
+
 
 <b> Reconstructed samples from linear grid in two dimensions </b> <br/>
 ![VAE generated samples MNIST](result_figures/VAE_generation.png) <br/>
