@@ -29,9 +29,9 @@ Currently hardcoded for MNIST
 """
 class VanillaGenerator(nn.Module):
     
-    def __init__(self, input_dim=10, num_classes=1, start_dim=128, blocks=3, output_dim=(1, 28, 28)):
+    def __init__(self, input_dim=10, num_classes=1, start_dim=128, blocks=3, output_dim=(28, 28), RGB=False):
         super(VanillaGenerator, self).__init__()
-        self.output_dim = output_dim
+        self.output_dim = (3 if RGB else 1, *output_dim)
         if num_classes > 1:
             self.embdd = torch.nn.Embedding(num_classes, input_dim)
         else:
@@ -95,6 +95,7 @@ class DCGenerator(nn.Module):
         self.dec = Decoder(final_size=final_resolution, in_channels=input_dim, encode_factor=up_blocks, RGB = RGB,
                            channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease,
                            initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, final_activation=nn.Tanh())
+        init(self)
         
 
     def forward(self, x, noise=None):
@@ -115,6 +116,7 @@ class DCDiscriminator(nn.Module):
             nn.Linear(channels * (channel_increase_factor**up_blocks), n_classes+1),
             nn.Sigmoid()
         )
+        init(self)
         
         
     def forward(self, x):
@@ -140,10 +142,10 @@ if __name__ == '__main__':
     #n_classes = 10 if args.aux else 0
     
     if args.data == 'MNIST':
-        final_res = (28, 28)
+        input_size = (28, 28)
         RGB = False
     elif args.data == 'CelebA':
-        final_res = (178, 218)
+        input_size = (178, 218)
         RGB = True
     else:
         raise NotImplementedError('Dataset unkown')
@@ -151,11 +153,19 @@ if __name__ == '__main__':
     
     if args.model == 'Vanilla':
         print('Vanilla Generator test')
-        gen = VanillaGenerator(input_dim=args.input_dim).to(device)
+        latent_dim = 100
+        encode_blocks = 3
+        base_channels = 128
+        
+        disc_blocks=3
+        
+        gen = VanillaGenerator(input_dim=latent_dim, num_classes=0, start_dim=base_channels, blocks=encode_blocks, 
+                                   output_dim=input_size, RGB=RGB).to(device)
         summary(gen, (latent_dim,))
         print('Vanilla Discriminator test')
-        disc = VanillaDiscriminator().to(device)
-        summary(disc, (3 if RGB else 1,*final_res))
+        disc = VanillaDiscriminator(n_classes=0, blocks=disc_blocks, 
+                                        output_dim=input_size, end_dim=base_channels).to(device)
+        summary(disc, (3 if RGB else 1,*input_size))
     elif args.model == 'DC':
         latent_dim = 100
         encode_blocks = 4
@@ -165,19 +175,19 @@ if __name__ == '__main__':
         initial_upsample_size = 3
         
         #DISC_PARAMS
-        base_channels = 32
+        base_channels = 16
         disc_encode_blocks = 2
         disc_conv_blocks_per_decrease = 4
         
         print('DC Generator test')
-        gen = DCGenerator(input_dim=latent_dim, up_blocks=encode_blocks, final_resolution=final_res, 
+        gen = DCGenerator(input_dim=latent_dim, up_blocks=encode_blocks, final_resolution=input_size, 
                           num_classes=0,channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease,
                           initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, RGB=RGB).to(device)
         summary(gen, (latent_dim,))
         print('DC Discriminator test')
         disc = DCDiscriminator(channels=base_channels, n_classes=0, up_blocks=disc_encode_blocks,channel_increase_factor=channel_increase_factor,
                  conv_blocks_per_decrease=disc_conv_blocks_per_decrease, skip_connections=skip_connections, RGB=RGB).to(device)
-        summary(disc, (3 if RGB else 1,*final_res))
+        summary(disc, (3 if RGB else 1,*input_size))
     else:
         raise NotImplementedError('Model test not implemented')
     

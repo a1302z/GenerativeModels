@@ -50,16 +50,21 @@ def create_model(config, model_name, num_classes=1):
     elif model_name == 'VanillaGAN':
         latent_dim = config.getint('HYPERPARAMS', 'latent_dim', fallback=10)
         #print('Latent dim was set to {:d}'.format(latent_dim))
-        gen = GAN.VanillaGenerator(input_dim = latent_dim, num_classes=num_classes, blocks=encode_blocks, final_resolution=input_size,
-                                   channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, 
-                                   initial_upsample_size=initial_upsample_size, skip_connections=skip_connections)
-        disc = GAN.VanillaDiscriminator(n_classes=num_classes, blocks=config.getint('DISC_PARAMS', 'encode_blocks', fallback=encode_blocks), 
-                                        channels=base_channels, up_blocks=encode_blocks,channel_increase_factor=channel_increase_factor,
-                                        conv_blocks_per_decrease=config.getint('DISC_PARAMS', 'encode_blocks', fallback=conv_blocks_per_decrease), skip_connections=skip_connections, RGB=RGB)
+        gen = GAN.VanillaGenerator(input_dim=latent_dim, num_classes=num_classes, start_dim=base_channels, blocks=encode_blocks, 
+                                   output_dim=input_size, RGB=RGB)
+        disc = GAN.VanillaDiscriminator(n_classes=num_classes, blocks=config.getint('DISC_PARAMS', 'encode_blocks',fallback=encode_blocks), 
+                                        output_dim=input_size, end_dim=base_channels)
         model = (gen, disc)
     elif model_name == 'DCGAN':
-        gen = GAN.DCGenerator(input_dim = latent_dim, num_classes=num_classes)
-        disc = GAN.DCDiscriminator(n_classes=num_classes)
+        gen = GAN.DCGenerator(input_dim = latent_dim, num_classes=num_classes, 
+                              up_blocks=config.getint('DISC_PARAMS', 'encode_blocks',fallback=encode_blocks), 
+                              final_resolution=input_size, channel_increase_factor=channel_increase_factor, 
+                              conv_blocks_per_decrease=conv_blocks_per_decrease, initial_upsample_size=initial_upsample_size, 
+                              skip_connections=skip_connections)
+        disc = GAN.DCDiscriminator(n_classes=num_classes, up_blocks=config.getint('DISC_PARAMS', 'encode_blocks', fallback=encode_blocks), 
+                                        channels=base_channels,channel_increase_factor=channel_increase_factor,
+                                        conv_blocks_per_decrease=config.getint('DISC_PARAMS', 'encode_blocks', fallback=conv_blocks_per_decrease), 
+                                   skip_connections=skip_connections, RGB=RGB)
         model = (gen, disc)
     else:
         raise NotImplementedError('The model you specified is not implemented yet')
