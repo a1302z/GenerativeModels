@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from models.common import init
-#from common import init
+from models.common import init, Decoder, Encoder
+import numpy as np
 
 class equiv(nn.Module):
     def __init__(self):
@@ -29,18 +29,23 @@ Currently hardcoded for MNIST
 """
 class VanillaGenerator(nn.Module):
     
-    def __init__(self, input_dim=10, num_classes=1):
+    def __init__(self, input_dim=10, num_classes=1, start_dim=128, blocks=3, output_dim=(1, 28, 28)):
         super(VanillaGenerator, self).__init__()
+        self.output_dim = output_dim
         if num_classes > 1:
             self.embdd = torch.nn.Embedding(num_classes, input_dim)
         else:
             self.embdd = equiv()
+        modules = []
+        modules.append(VanillaUpBlock(input_dim, start_dim))
+        cur_dim = start_dim
+        for i in range(blocks):
+            modules.append(VanillaUpBlock(cur_dim, cur_dim*2))
+            cur_dim *= 2
+        
         self.generate = nn.Sequential(
-            VanillaUpBlock(input_dim, 128),
-            VanillaUpBlock(128, 256),
-            VanillaUpBlock(256, 512),
-            VanillaUpBlock(512, 1024),
-            nn.Linear(1024, 784),
+            *modules,
+            nn.Linear(cur_dim, np.prod(output_dim)),
             nn.Tanh(),
         )
         init(self)
@@ -51,20 +56,23 @@ class VanillaGenerator(nn.Module):
         if noise:
             x += noise
         x = self.generate(x)
-        x = x.view(-1, 1, 28, 28)
+        x = x.view(-1, *self.output_dim)
         return x
 
 class VanillaDiscriminator(nn.Module):
-    def __init__(self, n_classes=0):
+    def __init__(self, n_classes=0, blocks=3, output_dim=(1, 28, 28), end_dim=128):
         super(VanillaDiscriminator, self).__init__()
+        start_dim = end_dim * (2**(blocks-1))
+        modules = [nn.Linear(np.prod(output_dim), start_dim), nn.LeakyReLU()]
+        cur_dim = start_dim
+        for i in range(blocks-1):
+            modules.append(nn.Linear(cur_dim, cur_dim // 2))
+            modules.append(nn.LeakyReLU())
+            cur_dim = cur_dim // 2
+        
         self.discriminate = nn.Sequential(
-            nn.Linear(784, 512),
-            nn.LeakyReLU(),
-            nn.Linear(512, 256),
-            nn.LeakyReLU(),
-            nn.Linear(256, 128),
-            nn.LeakyReLU(),
-            nn.Linear(128, n_classes+1),
+            *modules,
+            nn.Linear(cur_dim, n_classes+1),
             nn.Sigmoid()
         )
         init(self)
@@ -72,7 +80,109 @@ class VanillaDiscriminator(nn.Module):
     def forward(self, x):
         x = x.view(x.size(0), -1)
         return self.discriminate(x)
+
     
+
+    
+class DCGenerator(nn.Module):
+    def __init__(self, input_dim=100, up_blocks=4, final_resolution=(28, 28), num_classes=0,channel_increase_factor=2,
+                 conv_blocks_per_decrease=1, initial_upsample_size=3, skip_connections=False, RGB=False):
+        super(DCGenerator, self).__init__()
+        if num_classes > 0:
+            self.embdd = torch.nn.Embedding(num_classes, input_dim)
+        else:
+            self.embdd = equiv()
+        self.dec = Decoder(final_size=final_resolution, in_channels=input_dim, encode_factor=up_blocks, RGB = RGB,
+                           channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease,
+                           initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, final_activation=nn.Tanh())
+        
+
+    def forward(self, x, noise=None):
+        x = self.embdd(x)
+        if noise is not None:
+            x = x.view(noise.size())
+            x += noise
+        x = x.view(*x.size(), 1, 1)
+        x = self.dec(x)
+        return x
+    
+class DCDiscriminator(nn.Module):
+    def __init__(self, channels=16, n_classes=0, up_blocks=2,channel_increase_factor=2,
+                 conv_blocks_per_decrease=1, skip_connections=False, RGB=False):
+        super(DCDiscriminator, self).__init__()
+        self.enc = Encoder(base_channels=channels, encode_factor=up_blocks, channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease, RGB=RGB, skip_connections=skip_connections)
+        self.classify = nn.Sequential(
+            nn.Linear(channels * (channel_increase_factor**up_blocks), n_classes+1),
+            nn.Sigmoid()
+        )
+        
+        
+    def forward(self, x):
+        x = self.enc(x)
+        x = x.squeeze()
+        x = self.classify(x)
+        return x
+        
+    
+  
+    
+if __name__ == '__main__':
+    from torchsummary import summary
+    import argparse as arg
+    parser = arg.ArgumentParser()
+    parser.add_argument('--model', required=True, type=str, choices=['Vanilla', 'DC'], help='Which model to test?')
+    parser.add_argument('--data', default='MNIST', type=str, choices=['MNIST', 'CelebA'], help='Which data format?')
+    #parser.add_argument('--input_dim', type=int, default=100, help='What input dimension for generator?')
+    #parser.add_argument('--aux', action='store_true', help='Test auxillary setting')
+    args = parser.parse_args()
+    
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #n_classes = 10 if args.aux else 0
+    
+    if args.data == 'MNIST':
+        final_res = (28, 28)
+        RGB = False
+    elif args.data == 'CelebA':
+        final_res = (178, 218)
+        RGB = True
+    else:
+        raise NotImplementedError('Dataset unkown')
+    
+    
+    if args.model == 'Vanilla':
+        print('Vanilla Generator test')
+        gen = VanillaGenerator(input_dim=args.input_dim).to(device)
+        summary(gen, (latent_dim,))
+        print('Vanilla Discriminator test')
+        disc = VanillaDiscriminator().to(device)
+        summary(disc, (3 if RGB else 1,*final_res))
+    elif args.model == 'DC':
+        latent_dim = 100
+        encode_blocks = 4
+        channel_increase_factor = 2
+        conv_blocks_per_decrease = 8
+        skip_connections = True
+        initial_upsample_size = 3
+        
+        #DISC_PARAMS
+        base_channels = 32
+        disc_encode_blocks = 2
+        disc_conv_blocks_per_decrease = 4
+        
+        print('DC Generator test')
+        gen = DCGenerator(input_dim=latent_dim, up_blocks=encode_blocks, final_resolution=final_res, 
+                          num_classes=0,channel_increase_factor=channel_increase_factor, conv_blocks_per_decrease=conv_blocks_per_decrease,
+                          initial_upsample_size=initial_upsample_size, skip_connections=skip_connections, RGB=RGB).to(device)
+        summary(gen, (latent_dim,))
+        print('DC Discriminator test')
+        disc = DCDiscriminator(channels=base_channels, n_classes=0, up_blocks=disc_encode_blocks,channel_increase_factor=channel_increase_factor,
+                 conv_blocks_per_decrease=disc_conv_blocks_per_decrease, skip_connections=skip_connections, RGB=RGB).to(device)
+        summary(disc, (3 if RGB else 1,*final_res))
+    else:
+        raise NotImplementedError('Model test not implemented')
+    
+    
+"""
 class DCGenerator(nn.Module):
     def __init__(self, input_dim=100, channels=128, final_resolution=28, num_classes=1):
         super(DCGenerator, self).__init__()
@@ -142,35 +252,5 @@ class DCDiscriminator(nn.Module):
         x = x.view(x.size(0), -1)
         x = self.classify(x)
         return self.sm(x)
-    
-    
-if __name__ == '__main__':
-    from torchsummary import summary
-    import argparse as arg
-    parser = arg.ArgumentParser()
-    parser.add_argument('--model', required=True, type=str, choices=['Vanilla', 'DC'], help='Which model to test?')
-    parser.add_argument('--input_dim', type=int, default=100, help='What input dimension for generator?')
-    #parser.add_argument('--aux', action='store_true', help='Test auxillary setting')
-    args = parser.parse_args()
-    
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    #n_classes = 10 if args.aux else 0
-    
-    if args.model == 'Vanilla':
-        print('Vanilla Generator test')
-        gen = VanillaGenerator(input_dim=args.input_dim).to(device)
-        summary(gen, (args.input_dim,))
-        print('Vanilla Discriminator test')
-        disc = VanillaDiscriminator().to('cuda')
-        summary(disc, (1,28,28))
-    elif args.model == 'DC':
-        print('DC Generator test')
-        gen = DCGenerator(input_dim=args.input_dim).to(device)
-        summary(gen, (args.input_dim,))
-        print('DC Discriminator test')
-        disc = DCDiscriminator().to('cuda')
-        summary(disc, (1,28,28))
-    else:
-        raise NotImplementedError('Model test not implemented')
-    
+"""  
 
