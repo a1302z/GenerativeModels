@@ -57,13 +57,13 @@ def create_model(config, model_name, num_classes=1):
         model = (gen, disc)
     elif model_name == 'DCGAN':
         gen = GAN.DCGenerator(input_dim = latent_dim, num_classes=num_classes, 
-                              up_blocks=config.getint('DISC_PARAMS', 'encode_blocks',fallback=encode_blocks), 
+                              up_blocks=encode_blocks, 
                               final_resolution=input_size, channel_increase_factor=channel_increase_factor, 
                               conv_blocks_per_decrease=conv_blocks_per_decrease, initial_upsample_size=initial_upsample_size, 
                               skip_connections=skip_connections)
         disc = GAN.DCDiscriminator(n_classes=num_classes, up_blocks=config.getint('DISC_PARAMS', 'encode_blocks', fallback=encode_blocks), 
                                         channels=base_channels,channel_increase_factor=channel_increase_factor,
-                                        conv_blocks_per_decrease=config.getint('DISC_PARAMS', 'encode_blocks', fallback=conv_blocks_per_decrease), 
+                                        conv_blocks_per_decrease=config.getint('DISC_PARAMS', 'conv_blocks_per_decrease', fallback=conv_blocks_per_decrease), 
                                    skip_connections=skip_connections, RGB=RGB)
         model = (gen, disc)
     else:

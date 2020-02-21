@@ -12,6 +12,7 @@ dependencies:
   - visdom
   - ipywidgets
   - nodejs
+  - tqdm
   - pip
   - pip:
     - torchsummary

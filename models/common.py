@@ -62,7 +62,7 @@ class Encoder(nn.Module):
             else:
                 encode_modules.extend(skip_modules)
             encode_modules.append(ConvBlock(cur_channels, cur_channels*channel_increase_factor, bn = True))
-            cur_channels *= channel_increase_factor
+            cur_channels = cur_channels*channel_increase_factor
             encode_modules.append(nn.MaxPool2d(2))
         self.enc = nn.Sequential(
             *encode_modules,
